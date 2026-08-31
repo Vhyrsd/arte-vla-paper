@@ -1,242 +1,599 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%2345678901234567890123456789012345678901234567890123456789012345678901234567890
-%        1         2         3         4         5         6         7         8
+% ArTE-VLA draft for an intended ICRA 2027 submission.
+% Internal drafting notes should remain in comments rather than visible prose.
+% Before submission: add multi-seed results, complete ablations, replace the
+% author block, add figures, and verify the final ICRA format and bibliography.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[letterpaper, 10 pt, conference]{ieeeconf}  % Comment this line out if you need a4paper
+\documentclass[letterpaper,10pt,conference]{ieeeconf}
+\IEEEoverridecommandlockouts
+\overrideIEEEmargins
 
-%\documentclass[a4paper, 10pt, conference]{ieeeconf}      % Use this line for a4 paper
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{xcolor}
 
-\IEEEoverridecommandlockouts                              % This command is only needed if 
-                                                          % you want to use the \thanks command
-
-\overrideIEEEmargins                                      % Needed to meet printer requirements.
-
-%In case you encounter the following error:
-%Error 1010 The PDF file may be corrupt (unable to open PDF file) OR
-%Error 1000 An error occurred while parsing a contents stream. Unable to analyze the PDF file.
-%This is a known problem with pdfLaTeX conversion filter. The file cannot be opened with acrobat reader
-%Please use one of the alternatives below to circumvent this error by uncommenting one or the other
-%\pdfobjcompresslevel=0
-%\pdfminorversion=4
-
-% See the \addtolength command later in the file to balance the column lengths
-% on the last page of the document
-
-% The following packages can be found on http:\\www.ctan.org
-%\usepackage{graphics} % for pdf, bitmapped graphics files
-%\usepackage{epsfig} % for postscript graphics files
-%\usepackage{mathptmx} % assumes new font selection scheme installed
-%\usepackage{times} % assumes new font selection scheme installed
-%\usepackage{amsmath} % assumes amsmath package installed
-%\usepackage{amssymb}  % assumes amsmath package installed
+\newcommand{\method}{ArTE-VLA}
+\newif\ifdraftnotes
+\draftnotestrue % Set to \draftnotesfalse before submission.
+\newcommand{\draftnote}[1]{%
+  \ifdraftnotes
+    \par\smallskip\noindent
+    \parbox{\columnwidth}{%
+      \color{red}\footnotesize\textbf{TODO:} #1}%
+    \par\smallskip
+  \fi
+}
 
 \title{\LARGE \bf
-ArTE VLA
+ArTE-VLA: Autoregressive Target Effects for Vision-Language-Action Models
 }
 
-
-\author{Albert Author$^{1}$ and Bernard D. Researcher$^{2}$% <-this % stops a space
-\thanks{*This work was not supported by any organization}% <-this % stops a space
-\thanks{$^{1}$Albert Author is with Faculty of Electrical Engineering, Mathematics and Computer Science,
-        University of Twente, 7500 AE Enschede, The Netherlands
-        {\tt\small albert.author@papercept.net}}%
-\thanks{$^{2}$Bernard D. Researcheris with the Department of Electrical Engineering, Wright State University,
-        Dayton, OH 45435, USA
-        {\tt\small b.d.researcher@ieee.org}}%
-}
-
+\author{Anonymous Authors}
 
 \begin{document}
-
-
-
 \maketitle
 \thispagestyle{empty}
 \pagestyle{empty}
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{abstract}
-
-This electronic document is a “live” template. The various components of your paper [title, text, heads, etc.] are already defined on the style sheet, as illustrated by the portions given in this document.
-
+Vision-language-action (VLA) models typically generate robot actions directly
+from visual observations and language instructions, leaving the intended
+physical evolution of the scene implicit. We introduce \method{}, a VLA that
+predicts how the language-referred target should change before generating an
+action. Given dual-view RGB observations and an instruction, \method{} infers an
+implicit target representation and autoregressively predicts target effects at
+four future horizons. Each effect describes translation, rotation, linear and
+angular velocity, and activity. The predicted effects are embedded as tokens and
+appended to the visual-language prefix, allowing the action expert to condition
+on a compact physical future. Simulator states provide effect supervision during
+training but are not required at inference. In a single-seed study on all ten
+LIBERO-Object tasks, \method{} improves the success rate of a recipe-matched
+PI0.5 baseline from 70.8\% to 83.6\% over 500 paired episodes. Fixed-noise
+interventions further show that changing the predicted effect values produces
+consistent changes in generated actions. These results suggest that a compact,
+target-centric future representation can provide an effective and inspectable
+interface between VLA perception and control.
 \end{abstract}
 
+\draftnote{Recompute the abstract's numerical claims after multi-seed
+replication. Until then, retain the explicit single-seed qualification.}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{INTRODUCTION}
+\label{sec:introduction}
 
-This template provides authors with most of the formatting specifications needed for preparing electronic versions of their papers. All standard paper components have been specified for three reasons: (1) ease of use when formatting individual papers, (2) automatic compliance to electronic requirements that facilitate the concurrent or later production of electronic products, and (3) conformity of style throughout a conference proceedings. Margins, column widths, line spacing, and type styles are built-in; examples of the type styles are provided throughout this document and are identified in italic type, within parentheses, following the example. Some components, such as multi-leveled equations, graphics, and tables are not prescribed, although the various table text styles are provided. The formatter will need to create these components, incorporating the applicable criteria that follow.
+Vision-language-action models have emerged as a promising route toward general
+robot policies. By combining pretrained visual-language representations with
+large collections of robot demonstrations, recent VLAs can follow open-vocabulary
+instructions and transfer across objects, tasks, and environments
+\cite{pi05}. Most existing architectures, however, are optimized to map the
+current observation directly to an action sequence. The physical outcome that
+connects an instruction to an action---which object should move, in what way,
+and over what time scale---remains latent inside the policy.
 
-\section{PROCEDURE FOR PAPER SUBMISSION}
+This direct formulation creates two related difficulties. First, the action
+expert must simultaneously resolve language grounding, infer task-relevant
+dynamics, and generate precise controls. Second, the resulting computation is
+difficult to inspect: a successful rollout does not reveal whether the policy
+anticipated the intended object motion or relied on a less robust correlation.
+Predictive world models and visual chain-of-thought methods address this problem
+by forecasting future images or point trajectories before acting
+\cite{cotvla,worldvla,atm,track2act}. Although expressive, these intermediate
+representations can be high-dimensional and need not isolate the physical state
+of the object that is central to the instruction.
 
-\subsection{Selecting a Template (Heading 2)}
+We propose \method{}, which inserts a compact target-effect bottleneck into a
+pretrained VLA. Rather than predicting a complete future image, the model
+compresses its visual-language prefix into an implicit representation of the
+primary target and predicts the target's physical effects at four horizons.
+Each prediction contains a 3-D translation, a 3-D rotation, linear and angular
+velocity, and an activity logit. The predictions form an autoregressive chain:
+the effect at one horizon is used to predict the next. Horizon-specific hidden
+states and effect values are then projected into tokens that condition the
+flow-matching action expert.
 
-First, confirm that you have the correct template for your paper size. This template has been tailored for output on the US-letter paper size. 
-It may be used for A4 paper size if the paper size setting is suitably modified.
+The target-effect representation is learned with privileged supervision but
+used without privileged inputs. We recover object states from the simulator
+states stored in LIBERO demonstrations and construct aligned multi-horizon
+effect labels. These labels appear only in the auxiliary prediction loss; the
+action expert always receives model-predicted effects. At test time, \method{}
+uses the same RGB observations, instruction, and robot state as vanilla PI0.5.
+This separation allows structured physical supervision to shape the policy
+without introducing an object detector, simulator state, task identifier, or
+ground-truth target state into the deployed model.
 
-\subsection{Maintaining the Integrity of the Specifications}
-
-The template is used to format your paper and style the text. All margins, column widths, line spaces, and text fonts are prescribed; please do not alter them. You may note peculiarities. For example, the head margin in this template measures proportionately more than is customary. This measurement and others are deliberate, using specifications that anticipate your paper as one part of the entire proceedings, and not as an independent document. Please do not revise any of the current designations
-
-\section{MATH}
-
-Before you begin to format your paper, first write and save the content as a separate text file. Keep your text and graphic files separate until after the text has been formatted and styled. Do not use hard tabs, and limit use of hard returns to only one return at the end of a paragraph. Do not add any kind of pagination anywhere in the paper. Do not number text heads-the template will do that for you.
-
-Finally, complete content and organizational editing before formatting. Please take note of the following items when proofreading spelling and grammar:
-
-\subsection{Abbreviations and Acronyms} Define abbreviations and acronyms the first time they are used in the text, even after they have been defined in the abstract. Abbreviations such as IEEE, SI, MKS, CGS, sc, dc, and rms do not have to be defined. Do not use abbreviations in the title or heads unless they are unavoidable.
-
-\subsection{Units}
-
+Our main contributions are:
 \begin{itemize}
-
-\item Use either SI (MKS) or CGS as primary units. (SI units are encouraged.) English units may be used as secondary units (in parentheses). An exception would be the use of English units as identifiers in trade, such as “3.5-inch disk drive”.
-\item Avoid combining SI and CGS units, such as current in amperes and magnetic field in oersteds. This often leads to confusion because equations do not balance dimensionally. If you must use mixed units, clearly state the units for each quantity that you use in an equation.
-\item Do not mix complete spellings and abbreviations of units: “Wb/m2” or “webers per square meter”, not “webers/m2”.  Spell out units when they appear in text: “. . . a few henries”, not “. . . a few H”.
-\item Use a zero before decimal points: “0.25”, not “.25”. Use “cm3”, not “cc”. (bullet list)
-
+    \item We introduce a compact, target-centric physical-effect bottleneck for
+    VLA policies. The bottleneck predicts a four-horizon autoregressive future
+    and directly conditions the action expert.
+    \item We develop a replay-based labeling pipeline that adds aligned target
+    effects to robot demonstrations while preserving their original images,
+    actions, states, and language instructions.
+    \item We formulate value-preserving interventions that separate reliance on
+    the complete effect token from reliance on its explicit physical values and
+    temporal order.
+    \item On LIBERO-Object, \method{} improves a matched PI0.5 baseline by 12.8
+    percentage points in a 500-episode paired evaluation, while revealing
+    substantial variation across target objects.
 \end{itemize}
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{RELATED WORK}
+\label{sec:related_work}
 
-\subsection{Equations}
+\subsection{Vision-Language-Action Models}
 
-The equations are an exception to the prescribed specifications of this template. You will need to determine whether or not your equation should be typed using either the Times New Roman or the Symbol font (please no other font). To create multileveled equations, it may be necessary to treat the equation as a graphic and insert it into the text after your paper is styled. Number equations consecutively. Equation numbers, within parentheses, are to position flush right, as in (1), using a right tab stop. To make your equations more compact, you may use the solidus ( / ), the exp function, or appropriate exponents. Italicize Roman symbols for quantities and variables, but not Greek symbols. Use a long dash rather than a hyphen for a minus sign. Punctuate equations with commas or periods when they are part of a sentence, as in
+VLA models adapt pretrained vision-language representations to continuous robot
+control. PI0.5 combines heterogeneous co-training with a flow-matching action
+expert to support open-world manipulation \cite{pi05}. \method{} uses PI0.5 as
+its backbone and leaves the original visual-language prefix and action head
+intact. Its contribution is an intermediate physical prediction interface that
+is trained jointly with the action objective and consumed directly by the
+action expert.
 
-$$
-\alpha + \beta = \chi \eqno{(1)}
-$$
+\subsection{Predictive Representations for Control}
 
-Note that the equation is centered using a center tab stop. Be sure that the symbols in your equation have been defined before or immediately following the equation. Use “(1)”, not “Eq. (1)” or “equation (1)”, except at the beginning of a sentence: “Equation (1) is . . .”
+World-model approaches learn scene dynamics through future observation
+prediction. GR-2 jointly learns video generation and action prediction from web
+videos and robot trajectories \cite{gr2}, while WorldVLA unifies image and
+action generation within an autoregressive model \cite{worldvla}. CoT-VLA
+generates future visual goals as an explicit visual chain of thought before
+predicting actions \cite{cotvla}. These methods represent future scene content
+with image or video tokens. In contrast, \method{} predicts a low-dimensional
+physical state change for one language-conditioned target. The two approaches
+are complementary: visual prediction preserves scene appearance, whereas a
+target-effect bottleneck exposes a concise variable that can be measured and
+intervened upon.
 
-\subsection{Some Common Mistakes}
-\begin{itemize}
+\subsection{Object and Point Motion as Policy Guidance}
 
+Predicted motion can also serve as a control representation. Any-point
+Trajectory Modeling predicts the future motion of arbitrary image points and
+uses those trajectories to guide policy learning \cite{atm}. Track2Act predicts
+goal-conditioned point tracks from internet videos and converts them into object
+and end-effector motion plans \cite{track2act}. \method{} shares the premise that
+future motion is useful for control, but differs in three respects: it predicts
+a single instruction-grounded target, represents motion with multi-horizon 3-D
+physical effects rather than 2-D tracks, and injects the prediction into the
+token sequence of an end-to-end VLA action expert.
 
-\item The word “data” is plural, not singular.
-\item The subscript for the permeability of vacuum ?0, and other common scientific constants, is zero with subscript formatting, not a lowercase letter “o”.
-\item In American English, commas, semi-/colons, periods, question and exclamation marks are located within quotation marks only when a complete thought or name is cited, such as a title or full quotation. When quotation marks are used, instead of a bold or italic typeface, to highlight a word or phrase, punctuation should appear outside of the quotation marks. A parenthetical phrase or statement at the end of a sentence is punctuated outside of the closing parenthesis (like this). (A parenthetical sentence is punctuated within the parentheses.)
-\item A graph within a graph is an “inset”, not an “insert”. The word alternatively is preferred to the word “alternately” (unless you really mean something that alternates).
-\item Do not use the word “essentially” to mean “approximately” or “effectively”.
-\item In your paper title, if the words “that uses” can accurately replace the word “using”, capitalize the “u”; if not, keep using lower-cased.
-\item Be aware of the different meanings of the homophones “affect” and “effect”, “complement” and “compliment”, “discreet” and “discrete”, “principal” and “principle”.
-\item Do not confuse “imply” and “infer”.
-\item The prefix “non” is not a word; it should be joined to the word it modifies, usually without a hyphen.
-\item There is no period after the “et” in the Latin abbreviation “et al.”.
-\item The abbreviation “i.e.” means “that is”, and the abbreviation “e.g.” means “for example”.
+\draftnote{Expand and update the related-work review before submission,
+including target-conditioned object representations, action-conditioned world
+models, and contemporaneous VLA methods. Verify the final publication metadata
+for every arXiv citation.}
 
-\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{METHODOLOGY}
+\label{sec:method}
 
+\subsection{Problem Formulation}
 
-\section{USING THE TEMPLATE}
+At time $t$, the policy receives RGB observations $I_t$ from a workspace and a
+wrist camera, robot state $s_t$, and language instruction $\ell$. It predicts an
+action chunk $A_t=(a_t,\ldots,a_{t+C-1})$. We augment this mapping with a target
+effect chain $E_t=(e_t^1,\ldots,e_t^H)$ at $H=4$ future horizons:
+\begin{align}
+p(E_t\mid I_t,s_t,\ell)
+&=\prod_{h=1}^{H}p(e_t^h\mid e_t^{<h},I_t,s_t,\ell), \\
+p(A_t\mid I_t,s_t,\ell)
+&=p_{\theta}(A_t\mid X_t,T(E_t)),
+\label{eq:factorization}
+\end{align}
+where $X_t$ denotes the original PI0.5 prefix and $T(E_t)$ denotes the predicted
+effect tokens. We use frame offsets $(1,4,8,16)$, corresponding to $(0.1,0.4,
+0.8,1.6)$ seconds at the 10-Hz control rate. Autoregression in
+Eq.~\eqref{eq:factorization} refers to temporal prediction and does not imply
+identification of a structural causal model.
 
-Use this sample document as your LaTeX source file to create your document. Save this file as {\bf root.tex}. You have to make sure to use the cls file that came with this distribution. If you use a different style file, you cannot expect to get required margins. Note also that when you are creating your out PDF file, the source file is only part of the equation. {\it Your \TeX\ $\rightarrow$ PDF filter determines the output file size. Even if you make all the specifications to output a letter file in the source - if your filter is set to produce A4, you will only get A4 output. }
+\subsection{Implicit Target Representation}
 
-It is impossible to account for all possible situation, one would encounter using \TeX. If you are using multiple \TeX\ files you must make sure that the ``MAIN`` source file is called root.tex - this is particularly important if your conference is using PaperPlaza's built in \TeX\ to PDF conversion tool.
+PI0.5 encodes the two RGB observations and instruction into prefix embeddings
+$X_t\in\mathbb{R}^{N\times d}$. We apply masked mean pooling over the prefix and
+project the result to a 20-D vector:
+\begin{equation}
+z_t=f_{\mathrm{target}}\!\left(
+\frac{\sum_{i=1}^{N}m_iX_{t,i}}{\sum_{i=1}^{N}m_i}
+\right)\in\mathbb{R}^{20}.
+\label{eq:target}
+\end{equation}
+The vector $z_t$ is the sole active entity input to the effect predictor. It is
+not directly regressed to the current simulator state; instead, its semantics
+are induced by language-conditioned future-effect supervision and the action
+loss. We therefore treat it as an implicit target representation rather than a
+calibrated estimate of object pose.
 
-\subsection{Headings, etc}
+\subsection{Multi-Horizon Effect Chain}
 
-Text heads organize the topics on a relational, hierarchical basis. For example, the paper title is the primary text head because all subsequent material relates and elaborates on this one topic. If there are two or more sub-topics, the next level head (uppercase Roman numerals) should be used and, conversely, if there are not at least two sub-topics, then no subheads should be introduced. Styles named “Heading 1”, “Heading 2”, “Heading 3”, and “Heading 4” are prescribed.
+The effect model projects $z_t$ into a hidden state and combines it with a
+pooled VLA context, a learned horizon embedding, and the previously predicted
+effect. At horizon $h$, it produces
+\begin{equation}
+e_t^h=[\Delta p_t^h,\Delta r_t^h,v_t^h,\omega_t^h,q_t^h]
+\in\mathbb{R}^{13},
+\label{eq:effect}
+\end{equation}
+where $\Delta p_t^h\in\mathbb{R}^{3}$ and
+$\Delta r_t^h\in\mathbb{R}^{3}$ describe translation and axis-angle rotation
+relative to time $t$, $v_t^h,\omega_t^h\in\mathbb{R}^{3}$ are future linear and
+angular velocities, and $q_t^h$ is an activity logit. The prediction $e_t^h$ is
+projected back into the hidden space when computing $e_t^{h+1}$.
 
-\subsection{Figures and Tables}
+\subsection{Conditioning the Action Expert}
 
-Positioning Figures and Tables: Place figures and tables at the top and bottom of columns. Avoid placing them in the middle of columns. Large figures and tables may span across both columns. Figure captions should be below the figures; table heads should appear above the tables. Insert figures and tables after they are cited in the text. Use the abbreviation “Fig. 1”, even at the beginning of a sentence.
+The effect predictor retains a horizon-specific hidden context $c_t^h$. We
+combine this context with the corresponding physical prediction and project the
+result to the PI0.5 embedding dimension:
+\begin{equation}
+\tau_t^h=f_{\mathrm{token}}([c_t^h;e_t^h]).
+\label{eq:token}
+\end{equation}
+The four effect tokens are appended to the original prefix,
+$\widetilde{X}_t=[X_t;\tau_t^1;\ldots;\tau_t^4]$, and are visible to the
+flow-matching action expert. The original prefix is never replaced. Consequently,
+the policy can use the predicted physical future while retaining the full visual
+and linguistic context of the backbone.
 
-\begin{table}[h]
-\caption{An Example of a Table}
-\label{table_example}
-\begin{center}
-\begin{tabular}{|c||c|}
-\hline
-One & Two\\
-\hline
-Three & Four\\
-\hline
+\subsection{Training Objective}
+
+For each valid horizon, simulator replay supplies a target effect
+$\hat e_t^h$ and mask $M_t^h$. The loss is
+\begin{equation}
+\mathcal{L}=\mathcal{L}_{\mathrm{action}}
++\lambda_E\bigl(\mathcal{L}_{\mathrm{reg}}+\mathcal{L}_{\mathrm{act}}\bigr),
+\label{eq:objective}
+\end{equation}
+where $\mathcal{L}_{\mathrm{reg}}$ is masked Smooth-$L_1$ loss over the 12
+continuous values, $\mathcal{L}_{\mathrm{act}}$ is binary cross-entropy over
+activity, and $\lambda_E=1$. We train the effect chain without teacher forcing:
+the action expert is conditioned on model predictions, never on future labels.
+
+\draftnote{Expand Eq.~\eqref{eq:objective} to specify horizon aggregation, mask
+normalization, active/inactive weighting, and the exact action-loss definition
+implemented in the training code.}
+
+\subsection{Replay-Based Effect Supervision}
+
+We construct effect labels by restoring the flattened simulator state stored at
+each demonstration frame and forwarding the simulator without re-executing the
+recorded action. For the supervised target, we measure pose displacement and
+future velocity at each offset in Eq.~\eqref{eq:factorization}. Horizons that
+cross an episode boundary are masked. The conversion preserves the original RGB
+observations, robot state, action, instruction, task index, episode index, and
+frame index. On LIBERO-Object, the target occupies the same entity slot across
+all ten tasks. The task index is used only to select a training label and is not
+embedded by the policy or provided during rollout.
+
+\subsection{Effect Interventions}
+
+We intervene on predicted effects while fixing the observation, language,
+checkpoint, diffusion noise, and denoising schedule. \emph{Mask} removes all
+effect tokens. \emph{Zero-12D} sets the continuous values in
+Eq.~\eqref{eq:effect} to zero while preserving the horizon context and activity
+logit. \emph{Reverse} reverses the order of the four effect values, and
+\emph{shuffle} substitutes values from another sample while retaining the
+receiving sample's hidden contexts. These interventions distinguish dependence
+on the added token pathway from dependence on predicted physical values and
+their temporal organization.
+
+\draftnote{Add the main architecture figure showing the PI0.5 backbone, implicit
+target representation, four autoregressive effect steps, action conditioning,
+and the training-only simulator-supervision pathway.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{EXPERIMENTS}
+\label{sec:experiments}
+
+\subsection{Benchmark and Data}
+
+We evaluate on LIBERO-Object, which contains ten language-conditioned tabletop
+manipulation tasks \cite{libero}. The training set contains 454 available
+demonstration episodes and 66,984 frames. Replay enrichment yields 253,423 valid
+target-horizon labels, of which 170,107 are active. We verify frame-level
+alignment between the original and enriched datasets and observe a maximum
+action-alignment error of $2.90\times10^{-8}$. Terminal horizons without a valid
+successor state are masked.
+
+\subsection{Training Setup}
+
+Both vanilla PI0.5 and \method{} are initialized from
+\texttt{lerobot/pi05\_base} and fine-tuned for 30,000 updates using eight NVIDIA
+H20 GPUs, global batch size 64, bfloat16 precision, and seed 1000. We use the same
+optimizer, learning-rate schedule, image resolution, action chunk length of 16,
+and five executed actions per inference call. \method{} adds the target head,
+effect chain, effect-token projection, and the auxiliary loss in
+Eq.~\eqref{eq:objective}; the remaining training recipe is unchanged.
+
+\draftnote{Add the exact optimizer, learning rate and schedule, weight decay,
+image resolution, augmentation, checkpoint-selection rule, wall-clock training
+cost, and trainable-parameter overhead for reproducibility.}
+
+\subsection{Evaluation Protocol}
+
+For each task, we evaluate both policies from the same 50 demonstration-derived
+initial simulator states, resulting in 500 paired episodes per method. Rollouts
+use synchronous batches of ten environments, ten flow-matching inference steps,
+and a fixed time horizon. Success is recorded without terminating the episode
+early. We report per-task and aggregate success, paired rescue and regression
+counts, and the exact two-sided McNemar test. Because these resets reconstruct
+expert demonstration states rather than the benchmark's standard initial-state
+set, we keep this protocol separate from comparisons to previously published
+LIBERO results.
+
+\subsection{Baselines and Ablations}
+
+The primary baseline is recipe-matched vanilla PI0.5. To distinguish future
+prediction from auxiliary regularization and added capacity, the complete study
+also considers an effect predictor that does not condition actions, learned
+context tokens without structured values, current-target-state conditioning,
+non-autoregressive horizon prediction, and a privileged ground-truth-effect
+oracle. We evaluate removal, zero-value, reverse-order, and cross-sample shuffle
+interventions on the same \method{} checkpoint. These comparisons isolate three
+questions: whether the additional pathway improves control, whether future
+structure matters beyond additional tokens, and whether the trained action
+expert uses the predicted values.
+
+\draftnote{Run and report every baseline and ablation named above, including
+capacity-matched and value-free controls. Remove any comparison from the prose
+if it is not completed.}
+
+\subsection{Metrics}
+
+Closed-loop success is the primary metric. For effect prediction, we measure
+translation average and final displacement error, rotation error, linear and
+angular velocity error, and activity precision and recall. We also
+report prediction improvement over a zero-motion baseline. Intervention effects
+are measured by the fraction of changed action chunks, maximum absolute action
+difference, and relative root-mean-square (RMS) distance. Efficiency is measured
+with trainable parameter count, inference latency, and peak accelerator memory.
+
+\draftnote{Add the effect-prediction and efficiency results promised by this
+section, with per-horizon errors, a zero-motion comparison, parameter overhead,
+latency, and peak memory; otherwise remove unreported metrics.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{RESULTS}
+\label{sec:results}
+
+\subsection{Closed-Loop Performance}
+
+Table~\ref{tab:main_results} compares \method{} with vanilla PI0.5 and reserves
+matched columns for the auxiliary-only and value-free-token baselines.
+Aggregated over all ten tasks, target-effect conditioning improves success from
+70.8\% to 83.6\%, an absolute gain of 12.8 percentage points. Across the 500
+paired episodes, \method{} produces 127 rescues and 63 regressions. The
+corresponding exact two-sided McNemar test yields $p=3.99\times10^{-6}$.
+
+\begin{table*}[t]
+\caption{LIBERO-Object success over 50 paired episodes per task. Available
+results are from one training seed. Blank cells indicate matched baselines
+awaiting training and evaluation.}
+\label{tab:main_results}
+\centering
+\small
+\setlength{\tabcolsep}{9pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Target object & PI0.5 & Auxiliary-only & Value-Free Tokens & \method{} & $\Delta$ vs. PI0.5 \\
+\midrule
+Alphabet Soup       & 76\% & & & 74\% & $-2$ \\
+Cream Cheese        & 76\% & & & 94\% & $+18$ \\
+Salad Dressing      & 88\% & & & 82\% & $-6$ \\
+BBQ Sauce           & 96\% & & & 84\% & $-12$ \\
+Ketchup             & 98\% & & & 64\% & $-34$ \\
+Tomato Sauce        & 74\% & & & 92\% & $+18$ \\
+Butter              &  4\% & & & 94\% & $+90$ \\
+Milk                & 96\% & & & 70\% & $-26$ \\
+Chocolate Pudding   &  6\% & & & 84\% & $+78$ \\
+Orange Juice        & 94\% & & & 98\% & $+4$ \\
+\midrule
+\textbf{Overall}    & \textbf{70.8\%} & & & \textbf{83.6\%} & \textbf{$+12.8$} \\
+\bottomrule
 \end{tabular}
-\end{center}
+\end{table*}
+
+\draftnote{Repeat the main comparison with additional training seeds and report
+uncertainty intervals. Add a separate standard-LIBERO-initialization evaluation;
+do not merge it with the expert-demonstration-reset protocol used in Table~I.}
+
+\draftnote{Add a compact results visualization or paired rescue/regression
+summary so that the strongly heterogeneous per-task behavior is visible without
+relying only on aggregate success.}
+
+The aggregate improvement is dominated by two large rescues. On Butter and
+Chocolate Pudding, vanilla PI0.5 succeeds in only 4\% and 6\% of episodes,
+whereas \method{} reaches 94\% and 84\%, respectively. The gain is therefore
+not a uniform shift across tasks. Ketchup and Milk decrease by 34 and 26 points,
+and BBQ Sauce decreases by 12 points. This heterogeneity indicates that target
+effects can resolve severe failures of a direct policy, but can also introduce
+task-dependent interference.
+
+\subsection{Component Ablations}
+
+Table~\ref{tab:ablations} isolates the contribution of action conditioning,
+structured effect values, present-versus-future target information, and
+autoregressive horizon modeling. Each learned variant will use the same
+initialization, training budget, and evaluation protocol as the full model.
+
+\begin{table}[t]
+\caption{Matched component ablations on LIBERO-Object. Blank cells denote
+experiments that have not yet been completed.}
+\label{tab:ablations}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Variant & Success & $\Delta$ vs. PI0.5 \\
+\midrule
+Auxiliary-only              & & \\
+Value-Free Tokens           & & \\
+Current-target conditioning & & \\
+Non-autoregressive effects  & & \\
+\midrule
+Full \method{}              & 83.6\% & $+12.8$ \\
+\bottomrule
+\end{tabular}
 \end{table}
 
+\draftnote{Populate Table~\ref{tab:ablations} with separately trained,
+recipe-matched checkpoints and multi-seed uncertainty intervals.}
 
-   \begin{figure}[thpb]
-      \centering
-      \framebox{\parbox{3in}{We suggest that you use a text box to insert a graphic (which is ideally a 300 dpi TIFF or EPS file, with all fonts embedded) because, in an document, this method is somewhat more stable than directly inserting a picture.
-}}
-      %\includegraphics[scale=1.0]{figurefile}
-      \caption{Inductance of oscillation winding on amorphous
-       magnetic core versus DC bias magnetic field}
-      \label{figurelabel}
-   \end{figure}
-   
+\subsection{Action Dependence on Effect Values}
 
-Figure Labels: Use 8 point Times New Roman for Figure labels. Use words rather than symbols or abbreviations when writing Figure axis labels to avoid confusing the reader. As an example, write the quantity “Magnetization”, or “Magnetization, M”, not just “M”. If including units in the label, present them within parentheses. Do not label axes only with units. In the example, write “Magnetization (A/m)” or “Magnetization {A[m(1)]}”, not just “A/m”. Do not label axes with a ratio of quantities and units. For example, write “Temperature (K)”, not “Temperature/K.”
+We perform a fixed-noise action audit on 32 observations drawn equally from
+Butter and Chocolate Pudding. Repeating the unmodified forward computation gives
+zero numerical action difference. Zeroing the 12 continuous effect values
+changes the action chunk for all 32 samples. The median maximum absolute action
+difference is 0.00956, and the median relative RMS distance is 0.943\%.
+Reverse-order and cross-sample shuffle interventions also produce consistent
+action changes under the fixed-noise protocol.
 
-\section{CONCLUSIONS}
+\begin{table}[t]
+\caption{Fixed-noise effect interventions on 32 observations. Action metrics
+are measured relative to the unmodified computation. Blank cells are pending;
+closed-loop success requires full-task evaluation.}
+\label{tab:interventions}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+Setting & Changed & Max abs. & Rel. RMS & Success \\
+        & (\%)    &          & (\%)    & (\%) \\
+\midrule
+Unmodified repeat & 0   & 0       & 0     & \\
+Mask              &     &         &       & \\
+Zero-12D          & 100 & 0.00956 & 0.943 & \\
+Reverse           &     &         &       & \\
+Shuffle           &     &         &       & \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-A conclusion section is not required. Although a conclusion may review the main points of the paper, do not replicate the abstract as the conclusion. A conclusion might elaborate on the importance of the work or suggest applications and extensions. 
+These results establish computational dependence of the action expert on the
+predicted physical values. They do not establish that those values alone account
+for the closed-loop improvement: each effect token also contains a learned
+horizon context, and the zero-value median lies slightly below the prespecified
+1\% relative-RMS decision threshold. Closed-loop interventions over the full
+task distribution are therefore necessary to quantify the independent control
+value of the structured prediction.
 
-\addtolength{\textheight}{-12cm}   % This command serves to balance the column lengths
-                                  % on the last page of the document manually. It shortens
-                                  % the textheight of the last page by a suitable amount.
-                                  % This command does not take effect until the next page
-                                  % so it should come on the page before the last. Make
-                                  % sure that you do not shorten the textheight too much.
+\draftnote{Extend the value intervention beyond the current 32 observations and
+two tasks. Run all-task action audits and closed-loop mask, zero-value,
+reverse-order, and cross-sample-shuffle interventions before making an
+independent value-use claim.}
+
+\subsection{Task-Level Behavior}
+
+The paired outcomes suggest two complementary failure modes. For tasks on which
+vanilla PI0.5 rarely succeeds, target-effect supervision may provide an
+additional object-motion signal that disambiguates action generation. Conversely,
+the regressions on Ketchup, Milk, and BBQ Sauce may arise from inaccurate target
+effects, an implicit target representation that entangles object and task
+context, or competition between effect and visual-language tokens inside the
+action expert. Separating these explanations requires comparing effect error and
+action sensitivity on matched rescue and regression episodes.
+
+\draftnote{Add the matched rescue/regression diagnostic proposed above,
+including effect-error correlations and representative qualitative rollouts;
+otherwise keep these failure explanations explicitly speculative.}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{DISCUSSION}
+\label{sec:discussion}
 
+The current results support a narrow conclusion: adding an autoregressive
+target-effect pathway to PI0.5 improves aggregate success on LIBERO-Object and
+measurably changes the action computation. They do not yet show that predicting
+future physical values is uniformly beneficial across tasks or that explicit
+values are the sole source of improvement. In particular, learned horizon
+contexts provide an additional conditioning channel that must be controlled with
+parameter-matched and value-free baselines.
 
+The method also relies on privileged target-effect labels during training. This
+supervision is compatible with simulation and instrumented robot datasets, but
+application to unconstrained real-world data would require state estimation or
+pseudo-labeling. In addition, the current target representation is implicit and
+does not expose a calibrated present-time object pose. An explicit target
+estimator could improve interpretability, but would introduce association and
+geometry errors that the present architecture avoids.
+
+Finally, Table~\ref{tab:main_results} reports a single training seed and an
+expert-demonstration reset protocol. Multi-seed replication, matched auxiliary
+and capacity controls, standard LIBERO initial states, and evaluation beyond
+LIBERO-Object are required to determine whether the observed gain is robust and
+generalizes beyond the current setting.
+
+\draftnote{Add standard LIBERO initial-state results, held-out task suites, and
+cross-simulator evaluation, or narrow the final generalization claims to the
+current LIBERO-Object expert-reset setting.}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{CONCLUSION}
+\label{sec:conclusion}
 
+We presented \method{}, a VLA architecture that predicts a compact physical
+future for the language-referred target and uses that prediction to condition
+action generation. The method requires privileged object states only for
+training-time supervision and retains the original RGB-language interface at
+inference. On LIBERO-Object, \method{} substantially improves aggregate success
+over a matched PI0.5 baseline, while intervention experiments confirm that the
+action expert responds to the predicted values. The task-level regressions and
+the contribution of hidden effect context identify important limitations. More
+broadly, our results motivate structured future effects as an inspectable
+interface between visual-language understanding and continuous robot control.
 
+\draftnote{Revise the conclusion after the outstanding replications, ablations,
+and interventions; ensure that no final claim exceeds the completed evidence.}
+
+\draftnote{Complete the bibliography audit: expand coverage, replace arXiv
+entries with archival publication data where available, and verify author lists,
+titles, years, and identifiers.}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section*{APPENDIX}
-
-Appendixes should appear before the acknowledgment.
-
-\section*{ACKNOWLEDGMENT}
-
-The preferred spelling of the word “acknowledgment” in America is without an “e” after the “g”. Avoid the stilted expression, “One of us (R. B. G.) thanks . . .”  Instead, try “R. B. G. thanks”. Put sponsor acknowledgments in the unnumbered footnote on the first page.
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-References are important to the reader; therefore, each citation must be complete and correct. If at all possible, references should be commonly available publications.
-
-
-
 \begin{thebibliography}{99}
 
-\bibitem{c1} G. O. Young, “Synthetic structure of industrial plastics (Book style with paper title and editor),” 	in Plastics, 2nd ed. vol. 3, J. Peters, Ed.  New York: McGraw-Hill, 1964, pp. 15–64.
-\bibitem{c2} W.-K. Chen, Linear Networks and Systems (Book style).	Belmont, CA: Wadsworth, 1993, pp. 123–135.
-\bibitem{c3} H. Poor, An Introduction to Signal Detection and Estimation.   New York: Springer-Verlag, 1985, ch. 4.
-\bibitem{c4} B. Smith, “An approach to graphs of linear forms (Unpublished work style),” unpublished.
-\bibitem{c5} E. H. Miller, “A note on reflector arrays (Periodical style—Accepted for publication),” IEEE Trans. Antennas Propagat., to be publised.
-\bibitem{c6} J. Wang, “Fundamentals of erbium-doped fiber amplifiers arrays (Periodical style—Submitted for publication),” IEEE J. Quantum Electron., submitted for publication.
-\bibitem{c7} C. J. Kaufman, Rocky Mountain Research Lab., Boulder, CO, private communication, May 1995.
-\bibitem{c8} Y. Yorozu, M. Hirano, K. Oka, and Y. Tagawa, “Electron spectroscopy studies on magneto-optical media and plastic substrate interfaces(Translation Journals style),” IEEE Transl. J. Magn.Jpn., vol. 2, Aug. 1987, pp. 740–741 [Dig. 9th Annu. Conf. Magnetics Japan, 1982, p. 301].
-\bibitem{c9} M. Young, The Techincal Writers Handbook.  Mill Valley, CA: University Science, 1989.
-\bibitem{c10} J. U. Duncombe, “Infrared navigation—Part I: An assessment of feasibility (Periodical style),” IEEE Trans. Electron Devices, vol. ED-11, pp. 34–39, Jan. 1959.
-\bibitem{c11} S. Chen, B. Mulgrew, and P. M. Grant, “A clustering technique for digital communications channel equalization using radial basis function networks,” IEEE Trans. Neural Networks, vol. 4, pp. 570–578, July 1993.
-\bibitem{c12} R. W. Lucky, “Automatic equalization for digital communication,” Bell Syst. Tech. J., vol. 44, no. 4, pp. 547–588, Apr. 1965.
-\bibitem{c13} S. P. Bingulac, “On the compatibility of adaptive controllers (Published Conference Proceedings style),” in Proc. 4th Annu. Allerton Conf. Circuits and Systems Theory, New York, 1994, pp. 8–16.
-\bibitem{c14} G. R. Faulhaber, “Design of service systems with priority reservation,” in Conf. Rec. 1995 IEEE Int. Conf. Communications, pp. 3–8.
-\bibitem{c15} W. D. Doyle, “Magnetization reversal in films with biaxial anisotropy,” in 1987 Proc. INTERMAG Conf., pp. 2.2-1–2.2-6.
-\bibitem{c16} G. W. Juette and L. E. Zeffanella, “Radio noise currents n short sections on bundle conductors (Presented Conference Paper style),” presented at the IEEE Summer power Meeting, Dallas, TX, June 22–27, 1990, Paper 90 SM 690-0 PWRS.
-\bibitem{c17} J. G. Kreifeldt, “An analysis of surface-detected EMG as an amplitude-modulated noise,” presented at the 1989 Int. Conf. Medicine and Biological Engineering, Chicago, IL.
-\bibitem{c18} J. Williams, “Narrow-band analyzer (Thesis or Dissertation style),” Ph.D. dissertation, Dept. Elect. Eng., Harvard Univ., Cambridge, MA, 1993. 
-\bibitem{c19} N. Kawasaki, “Parametric study of thermal and chemical nonequilibrium nozzle flow,” M.S. thesis, Dept. Electron. Eng., Osaka Univ., Osaka, Japan, 1993.
-\bibitem{c20} J. P. Wilkinson, “Nonlinear resonant circuit devices (Patent style),” U.S. Patent 3 624 12, July 16, 1990. 
+\bibitem{pi05}
+Physical Intelligence et al., ``$\pi_{0.5}$: A vision-language-action model with
+open-world generalization,'' arXiv preprint arXiv:2504.16054, 2025.
 
+\bibitem{libero}
+B. Liu, Y. Zhu, C. Gao, Y. Feng, Q. Liu, Y. Zhu, and P. Stone, ``LIBERO:
+Benchmarking knowledge transfer for lifelong robot learning,'' in
+\emph{Advances in Neural Information Processing Systems}, vol. 36, 2023.
 
+\bibitem{cotvla}
+Q. Zhao et al., ``CoT-VLA: Visual chain-of-thought reasoning for
+vision-language-action models,'' arXiv preprint arXiv:2503.22020, 2025.
 
+\bibitem{worldvla}
+J. Cen et al., ``WorldVLA: Towards autoregressive action world model,'' arXiv
+preprint arXiv:2506.21539, 2025.
 
+\bibitem{gr2}
+C.-L. Cheang et al., ``GR-2: A generative video-language-action model with
+web-scale knowledge for robot manipulation,'' arXiv preprint arXiv:2410.06158,
+2024.
 
+\bibitem{atm}
+C. Wen, X. Lin, J. So, K. Chen, Q. Dou, Y. Gao, and P. Abbeel, ``Any-point
+trajectory modeling for policy learning,'' arXiv preprint arXiv:2401.00025,
+2024.
+
+\bibitem{track2act}
+H. Bharadhwaj, R. Mottaghi, A. Gupta, and S. Tulsiani, ``Track2Act: Predicting
+point tracks from internet videos enables generalizable robot manipulation,''
+arXiv preprint arXiv:2405.01527, 2024.
 
 \end{thebibliography}
 
-
-
+\draftnote{Before submission, set \texttt{\string\draftnotesfalse}, confirm the
+anonymous author block for review, remove identifying metadata and comments,
+and rerun the PaperPlaza PDF compliance check.}
 
 \end{document}
