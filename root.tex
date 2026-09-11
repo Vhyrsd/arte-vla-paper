@@ -99,13 +99,14 @@ the effect at one horizon is used to predict the next. Horizon-specific hidden
 states and effect values are then projected into tokens that condition the
 flow-matching action expert.
 
-The target-effect representation is learned with privileged supervision but
-used without privileged inputs. We recover object states from the simulator
-states stored in LIBERO demonstrations and construct aligned multi-horizon
-effect labels. These labels appear only in the auxiliary prediction loss; the
-action expert always receives model-predicted effects. At test time, \method{}
-uses the same RGB observations, instruction, and robot state as vanilla PI0.5.
-This separation allows structured physical supervision to shape the policy
+To physically ground this bottleneck without changing the policy's deployment
+inputs, we use simulator-derived target effects as privileged supervision during
+training only. We recover object states from the simulator states stored in
+LIBERO \cite{libero} demonstrations and construct aligned multi-horizon effect
+labels. These labels appear only in the auxiliary prediction loss; the action
+expert always receives model-predicted effects. At test time, \method{} uses the
+same RGB observations, instruction, and robot state as vanilla PI0.5
+\cite{pi05}. Consequently, structured physical supervision can shape the policy
 without introducing an object detector, simulator state, task identifier, or
 ground-truth target state into the deployed model.
 
@@ -117,11 +118,11 @@ Our main contributions are:
     \item We develop a replay-based labeling pipeline that adds aligned target
     effects to robot demonstrations while preserving their original images,
     actions, states, and language instructions.
-    \item We formulate value-preserving interventions that separate reliance on
-    the complete effect token from reliance on its explicit physical values and
-    temporal order.
-    \item On LIBERO-Object, \method{} improves a matched PI0.5 baseline by
-    13.4 percentage points across three evaluation seeds and 1,500
+    \item We formulate context-preserving effect-value interventions that
+    distinguish reliance on the overall effect-token pathway from sensitivity
+    to explicit physical values and their temporal order.
+    \item On LIBERO-Object \cite{libero}, \method{} improves a matched PI0.5
+    baseline by 13.4 percentage points across three evaluation seeds and 1,500
     paired episodes per method, while revealing substantial variation across
     target objects.
 \end{itemize}
@@ -133,7 +134,7 @@ Our main contributions are:
 \subsection{Vision-Language-Action Models}
 
 VLA models transfer pretrained vision-language priors to robot control through
-diverse manipulation trajectories. Octo supports language or goal-image
+diverse manipulation trajectories \cite{openvla}. Octo supports language or goal-image
 conditioning and adaptation to new observation and action spaces \cite{octo},
 while OpenVLA emphasizes an open, scalable VLA that can be fine-tuned for
 downstream manipulation \cite{openvla}. Flow-matching policies avoid
@@ -141,18 +142,18 @@ discretizing continuous controls: $\pi_0$ couples a vision-language backbone to
 a continuous action expert \cite{pi0}, and PI0.5 extends this family with
 heterogeneous co-training for open-world manipulation \cite{pi05}. These systems
 primarily map the current multimodal context directly to actions. \method{} uses
-PI0.5 as its backbone but adds a jointly supervised physical prediction
+PI0.5 \cite{pi05} as its backbone but adds a jointly supervised physical prediction
 interface that is consumed by the otherwise unchanged action expert.
 
 \subsection{Predictive Representations for Control}
 
 Predictive representations make intended scene evolution explicit before or
-alongside action generation. GR-2 jointly learns video and action prediction
+alongside action generation \cite{ding2025understanding}. GR-2 jointly learns video and action prediction
 from web videos and robot trajectories \cite{gr2}; CoT-VLA generates future
 visual goals before actions \cite{cotvla}; and WorldVLA places image and action
 generation in a shared autoregressive formulation \cite{worldvla}. These visual
 futures retain appearance and multi-object context, but also encode scene content
-irrelevant to the commanded manipulation. \method{} neither synthesizes future
+irrelevant to the commanded manipulation. \cite{xu2026futurevla, finn2017deep} \method{} neither synthesizes future
 observations nor performs explicit planning with learned dynamics. It predicts a
 low-dimensional physical change for one language-conditioned target and inserts
 it into the action context. Thus, visual prediction preserves rich scene
@@ -161,7 +162,7 @@ influence on actions can be directly tested.
 
 \subsection{Object and Point Motion as Policy Guidance}
 
-Object-centered conditioning separates task-relevant entities from the scene.
+Object-centered conditioning separates task-relevant entities from the scene \cite{kasu2026object,wang2026ocra}.
 MOO extracts object cues from the image and command to support manipulation of
 unseen categories \cite{moo}, but describes the current target rather than its
 desired evolution. Motion representations complement this grounding: Any-point
@@ -196,18 +197,17 @@ p(A_t,E_t\mid I_t,s_t,\ell)
 \label{eq:factorization}
 \end{align}
 where $T(E_t)$ embeds the predicted effects into the PI0.5 prefix space. We use
-$H=4$ offsets $k_h\in(1,4,8,16)$, corresponding to $(0.1,0.4,0.8,1.6)$~s at
-the 10-Hz control rate. The intermediate chain asks the model to first represent
-how the instructed target should evolve and then generate the complete action
-chunk conditioned on that evolution. The autoregression in
-Eq.~\eqref{eq:factorization} is a temporal factorization; it does not identify a
-structural causal model.
+$H=4$ temporal offsets $(k_1,\ldots,k_H)=(1,4,8,16)$, corresponding to
+$(0.1,0.4,0.8,1.6)$~s at the 10-Hz control rate. The intermediate chain asks the
+model to first represent how the instructed target should evolve and then
+generate the complete action chunk conditioned on that evolution. This is a
+temporal autoregressive factorization, not a structural causal model.
 
 \subsection{Implicit Target Representation}
 
 The backbone produces $X_t\in\mathbb{R}^{N\times d}$, including visual patches
-from both cameras and tokens from the instruction--state prompt. With prefix
-validity mask $m_i$, we form a global context $\bar x_t$ and predict one compact
+from both cameras and tokens from the instruction--state prompt. Using a prefix
+validity mask $m_i$, we form a global context $\bar x_t$ and produce one compact
 target latent:
 \begin{equation}
 \bar x_t=\frac{\sum_{i=1}^{N}m_iX_{t,i}}{\sum_{i=1}^{N}m_i},
@@ -215,14 +215,14 @@ target latent:
 \label{eq:target}
 \end{equation}
 Here $f_{\mathrm{target}}$ is a layer-normalized two-layer MLP with a 256-D
-hidden layer. The vector $z_t$ is inserted as the sole valid slot of the effect
-predictor; the remaining slots in the shared multi-entity implementation are
-masked. Because $z_t$ is inferred jointly from vision, language, and state, it
-can represent the primary object or articulated part referred to by the command
-without an explicit detector or object identifier. Importantly, $z_t$ is not
-regressed to the current simulator state. Its semantics arise only through the
-downstream future-effect and action objectives, so we call it an
-\emph{implicit target representation}, not a calibrated 20-D physical state.
+hidden layer. Our implementation retains the entity-slot dimension of the
+shared multi-entity predictor, but $z_t$ occupies its sole valid slot and the
+remaining slots are masked. Joint conditioning on vision, language, and state
+allows $z_t$ to encode the command-relevant object or articulated part without
+an explicit detector or object identifier. Importantly, $z_t$ is not regressed
+to the current simulator state. Its semantics arise only through the downstream
+future-effect and action objectives, so we call it an \emph{implicit target
+representation}, not a calibrated 20-D physical state.
 
 \subsection{Multi-Horizon Effect Chain}
 
@@ -253,31 +253,32 @@ where $\Delta p_t^h\in\mathbb{R}^{3}$ and
 $\Delta r_t^h\in\mathbb{R}^{3}$ describe translation and axis--angle rotation
 from $t$ to $t+k_h$, $v_t^h,\omega_t^h\in\mathbb{R}^{3}$ are linear and angular
 velocities at $t+k_h$, and $q_t^h$ is an activity logit. Translation and
-velocity are expressed in the end-effector frame at $t$; the rotation increment
-is the logarithmic map of $R_t^{\top}R_{t+k_h}$. This target-relative temporal
-schema separates intended physical change from the robot controls used to
-produce it.
+velocity are expressed in the end-effector frame at $t$. With $R_t$ denoting the
+target orientation, the rotation increment is the logarithmic map of
+$R_t^{\top}R_{t+k_h}$. This target-centric effect schema separates intended
+physical change from the robot controls used to produce it.
 
 \subsection{Conditioning the Action Expert}
 
-The 13-D values alone do not encode all visual and task context needed by the
-action expert. We therefore concatenate each prediction with its
-horizon-specific hidden state and project it to the backbone width:
+The 13-D prediction captures explicit physical quantities, while its hidden
+state retains the horizon-specific context used to produce them. We therefore
+concatenate each prediction with its hidden state and project the result to the
+backbone width:
 \begin{equation}
 \tau_t^h=f_{\mathrm{token}}([c_t^h;\hat e_t^h])\in\mathbb{R}^{d}.
 \label{eq:token}
 \end{equation}
-In our PI0.5 backbone, $d=2048$. The four effect tokens are appended to the original prefix,
-$\widetilde{X}_t=[X_t;\tau_t^1;\ldots;\tau_t^4]$, and are visible to the
-flow-matching action expert. The original prefix is never replaced, so the
-expert retains direct access to the images, instruction, and state in addition
-to the predicted future. Moreover, supervision-validity masks are used only in
-the effect loss: all four predicted tokens remain present during action training
-and inference. This prevents episode-boundary information from leaking into the
-policy through a label-derived token mask.
+In our PI0.5 backbone, $d=2048$. The four effect tokens are appended to the
+original prefix, $\widetilde{X}_t=[X_t;\tau_t^1;\ldots;\tau_t^4]$, and are visible
+to the flow-matching action expert. The original prefix is never replaced, so
+the expert retains direct access to the images, instruction, and state in
+addition to the predicted future. Moreover, supervision-validity masks are used
+only in the effect loss: all four predicted tokens remain present during action
+training and inference. This prevents episode-boundary information from leaking
+into the policy through a label-derived token mask.
 
-For completeness, let $\epsilon\sim\mathcal{N}(0,I)$ and $\gamma\in(0,1)$ be
-the action-flow noise and sampled flow time. Training constructs
+Following PI0.5, let $\epsilon\sim\mathcal{N}(0,I)$ and $\gamma\in(0,1)$ be the
+action-flow noise and sampled flow time. Training constructs
 $A_t^{\gamma}=(1-\gamma)A_t+\gamma\epsilon$ with target velocity
 $u_t=\epsilon-A_t$. The action expert predicts
 $v_{\theta}(A_t^{\gamma},\gamma\mid\widetilde X_t)$ and minimizes
@@ -314,22 +315,24 @@ where $\rho$ is Smooth-$L_1$. The full end-to-end objective is
 +\lambda_E\bigl(\mathcal{L}_{\mathrm{reg}}+\mathcal{L}_{\mathrm{act}}\bigr),
 \label{eq:objective}
 \end{equation}
-with $\lambda_E=1$. The reported model uses the raw effect objective: continuous
-components, active and inactive targets, and positive and negative activity
-labels receive unit weight before the valid-horizon normalization above. Both
-losses update the model jointly. Crucially, there is no teacher forcing in the
-effect recursion, and the action expert is always conditioned on predicted
-effects rather than replay labels. Training and deployment therefore share the
-same target-to-effect-to-action path.
+with $\lambda_E=1$. The reported model applies no component- or class-specific
+reweighting: all 12 continuous dimensions are weighted equally, including for
+inactive targets, and positive and negative activity labels receive equal weight
+before the valid-horizon normalization above. All three loss terms are optimized
+jointly. Crucially, there is no teacher forcing in the effect recursion, and the
+action expert is always conditioned on predicted effects rather than replay
+labels. Training and deployment therefore share the same
+target-to-effect-to-action path.
 
 \subsection{Replay-Based Effect Supervision}
 
 We obtain structured supervision without changing the policy's deployment
 inputs. For every demonstration frame, the enrichment procedure restores the
 stored flattened MuJoCo state and calls the simulator's kinematic forward pass;
-it never steps the recorded action. Matching stored states at $t$ and
-$t+k_h$ gives, with $R_{\mathrm{ee},t}$ denoting the current end-effector
-orientation,
+it never steps the recorded action. Let $p_t$, $R_t$, $v_t$, and $\omega_t$
+denote the target's position, orientation, linear velocity, and angular velocity
+in the restored state, and let $R_{\mathrm{ee},t}$ denote the current
+end-effector orientation. Matching stored states at $t$ and $t+k_h$ yields
 \begin{align}
 \Delta p_t^h &= R_{\mathrm{ee},t}^{\top}(p_{t+k_h}-p_t), \\
 \Delta r_t^h &= \operatorname{Log}(R_t^{\top}R_{t+k_h}), \\
@@ -337,18 +340,18 @@ v_t^h &= R_{\mathrm{ee},t}^{\top}v_{t+k_h}, \\
 \omega_t^h &= R_{\mathrm{ee},t}^{\top}\omega_{t+k_h}.
 \label{eq:effect_labels}
 \end{align}
-The target is marked active if translation exceeds $1$~mm, rotation exceeds
-$1^{\circ}$, linear velocity exceeds $0.01$~m/s, or angular velocity exceeds
-$0.05$~rad/s. A horizon is valid only when the same target exists at both
-frames and $t+k_h$ remains inside the episode.
+The target is marked active if $\|\Delta p_t^h\|_2$ exceeds $1$~mm,
+$\|\Delta r_t^h\|_2$ exceeds $1^{\circ}$, $\|v_t^h\|_2$ exceeds $0.01$~m/s, or
+$\|\omega_t^h\|_2$ exceeds $0.05$~rad/s. A horizon is valid only when the same
+target exists at both frames and $t+k_h$ remains inside the episode.
 
 Object names and simulator body identifiers are retained only as enrichment
 provenance. The enriched data preserve the original RGB observations,
 proprioception, actions, instructions, and frame indices. During training, the
-task index selects the teacher target from the multi-entity replay tensor and
-packs its labels into the single active target slot. In LIBERO-Object the target
-is slot 0 for all ten tasks. Neither the task index nor the teacher slot, object
-identity, effect label, or simulator state is embedded by the policy. At
+task index identifies the teacher entity in the multi-entity replay tensor. The
+selected labels are then packed into model slot 0, the sole active target slot
+for all ten LIBERO-Object tasks. Neither the task index nor the teacher slot,
+object identity, effect label, or simulator state is embedded by the policy. At
 deployment, the model uses only the same images, instruction, and robot state as
 the PI0.5 baseline.
 
@@ -356,16 +359,17 @@ the PI0.5 baseline.
 
 To test what information reaches the action expert, we intervene after effect
 prediction while fixing the observation, language, checkpoint, initial action
-noise, and flow-integration schedule. \emph{Mask} invalidates all effect tokens,
-measuring dependence on the added pathway as a whole. \emph{Zero-12D} sets only
+noise, and flow-integration schedule. \emph{Mask} hides all effect tokens from
+the action expert, measuring dependence on the added pathway as a whole.
+\emph{Zero-12D} sets only
 the 12 continuous values in Eq.~\eqref{eq:effect} to zero while preserving each
 horizon context $c_t^h$ and activity logit. \emph{Reverse} assigns the four
-13-D predictions in reverse temporal order, and \emph{shuffle} substitutes
-predictions from another sample. For value interventions, the altered effects
-are re-encoded with the receiving sample's original hidden contexts; its visual,
-language, and current-state information is never swapped. The resulting tests
-separate dependence on the token pathway from sensitivity to explicit physical
-values and their temporal organization.
+13-D predictions in reverse temporal order, and \emph{Shuffle} substitutes
+predictions from another sample. For these three effect-value interventions, the
+altered effects are re-encoded with the receiving sample's original hidden
+contexts; its visual, language, and current-state information is never swapped.
+The resulting tests distinguish dependence on the overall token pathway from
+sensitivity to explicit physical values and their temporal organization.
 
 \draftnote{Add the main architecture figure showing the PI0.5 backbone, implicit
 target representation, four autoregressive effect steps, action conditioning,
