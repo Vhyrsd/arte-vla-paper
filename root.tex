@@ -14,6 +14,7 @@
 \usepackage{amssymb}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{multirow}
 \usepackage{url}
 \usepackage{xcolor}
 
@@ -389,7 +390,9 @@ demonstration episodes and 66,984 frames. Replay enrichment yields 253,423 valid
 target-horizon labels, of which 170,107 are active. We verify frame-level
 alignment between the original and enriched datasets and observe a maximum
 action-alignment error of $2.90\times10^{-8}$. Terminal horizons without a valid
-successor state are masked.
+successor state are masked. We additionally evaluate the complete five-task
+atomic PickPlace family in RoboCasa \cite{robocasa2024}: Counter to Cabinet,
+Counter to Stove, Drawer to Counter, Sink to Counter, and Toaster to Counter.
 
 \subsubsection{Training Setup}
 
@@ -399,7 +402,9 @@ H20 GPUs, global batch size 64, bfloat16 precision, and seed 1000. We use the sa
 optimizer, learning-rate schedule, image resolution, action chunk length of 16,
 and five executed actions per inference call. \method{} adds the target head,
 effect chain, effect-token projection, and the auxiliary loss in
-Eq.~\eqref{eq:objective}; the remaining training recipe is unchanged.
+Eq.~\eqref{eq:objective}; the remaining training recipe is unchanged. For the
+RoboCasa study, both policies use seed-1000 checkpoints trained for 15,000
+updates with global batch size 128; their within-benchmark recipes are matched.
 
 \draftnote{Add the exact optimizer, learning rate and schedule, weight decay,
 image resolution, augmentation, checkpoint-selection rule, wall-clock training
@@ -420,6 +425,11 @@ Because these resets
 reconstruct expert demonstration states rather than the benchmark's standard
 initial-state set, we keep this protocol separate from comparisons to previously
 published LIBERO results.
+
+For RoboCasa, each task is evaluated on 20 task-seeded episodes under evaluation
+seed groups 1000, 2000, and 3000. This gives 100 episodes per method and seed
+group, or 300 episodes per method overall. The two methods use identical reset
+seeds and environment-provided instructions.
 
 \subsubsection{Baselines and Ablations}
 
@@ -454,8 +464,8 @@ latency, and peak memory; otherwise remove unreported metrics.}
 
 \subsection{Closed-Loop Performance}
 
-Table~\ref{tab:main_results} compares \method{} with vanilla PI0.5 and reserves
-matched columns for the auxiliary-only and value-free-token baselines.
+Table~\ref{tab:main_results} compares \method{} with recipe-matched vanilla
+PI0.5 on LIBERO-Object and five RoboCasa pick-and-place tasks.
 Across the three evaluation seeds, target-effect conditioning improves mean
 success from 70.9\% to 84.3\%, an absolute gain of 13.4 percentage points.
 The gains for seeds 1000, 2000, and 3000 are
@@ -464,30 +474,40 @@ The gains for seeds 1000, 2000, and 3000 are
 two-sided McNemar test yields $p=1.20\times10^{-17}$.
 
 \begin{table*}[t]
-\caption{LIBERO-Object success (\%) across three evaluation seeds using fixed
-seed-1000 training checkpoints. Entries are means across seeds;
-each seed contains 50 paired episodes per task. Blank cells indicate matched
-baselines awaiting training and evaluation.}
+\caption{Success (\%) on LIBERO-Object and RoboCasa PickPlace-5 across three
+evaluation seed groups using fixed seed-1000 training checkpoints. Entries are
+means across seeds. Each LIBERO-Object seed contains 50 paired episodes per task;
+each RoboCasa seed contains 20.}
 \label{tab:main_results}
 \centering
 \small
 \setlength{\tabcolsep}{5.5pt}
-\begin{tabular}{lrrrrr}
+\begin{tabular}{llrrr}
 \toprule
-Target object & PI0.5 & Auxiliary-only & Value-Free Tokens & \method{} & $\Delta$ vs. PI0.5 \\
+Benchmark & Task & PI0.5 & \method{} & $\Delta$ vs. PI0.5 \\
 \midrule
-Alphabet Soup       & 77.3 & & & 74.7 & $-2.7$ \\
-Cream Cheese        & 74.0 & & & 96.0 & $+22.0$ \\
-Salad Dressing      & 86.7 & & & 87.3 & $+0.7$ \\
-BBQ Sauce           & 93.3 & & & 88.0 & $-5.3$ \\
-Ketchup             & 97.3 & & & 64.0 & $-33.3$ \\
-Tomato Sauce        & 70.7 & & & 90.0 & $+19.3$ \\
-Butter              & 4.7  & & & 90.0 & $+85.3$ \\
-Milk                & 95.3 & & & 68.0 & $-27.3$ \\
-Chocolate Pudding   & 14.7 & & & 86.7 & $+72.0$ \\
-Orange Juice        & 95.3 & & & 98.7 & $+3.3$ \\
+\multirow{10}{*}{LIBERO-Object}
+ & Alphabet Soup       & 77.3 & 74.7 & $-2.7$ \\
+ & Cream Cheese        & 74.0 & 96.0 & $+22.0$ \\
+ & Salad Dressing      & 86.7 & 87.3 & $+0.7$ \\
+ & BBQ Sauce           & 93.3 & 88.0 & $-5.3$ \\
+ & Ketchup             & 97.3 & 64.0 & $-33.3$ \\
+ & Tomato Sauce        & 70.7 & 90.0 & $+19.3$ \\
+ & Butter              & 4.7  & 90.0 & $+85.3$ \\
+ & Milk                & 95.3 & 68.0 & $-27.3$ \\
+ & Chocolate Pudding   & 14.7 & 86.7 & $+72.0$ \\
+ & Orange Juice        & 95.3 & 98.7 & $+3.3$ \\
+\cmidrule(lr){2-5}
+ & Overall             & 70.9 & \textbf{84.3} & $+13.4$ \\
 \midrule
-Overall & 70.9 & & & \textbf{84.3} & $+13.4$ \\
+\multirow{5}{*}{RoboCasa}
+ & Counter to Cabinet  & 41.7 & 25.0 & $-16.7$ \\
+ & Counter to Stove    & 76.7 & 28.3 & $-48.3$ \\
+ & Drawer to Counter   & 40.0 & 16.7 & $-23.3$ \\
+ & Sink to Counter     & 70.0 & 45.0 & $-25.0$ \\
+ & Toaster to Counter  & 88.3 & 73.3 & $-15.0$ \\
+\cmidrule(lr){2-5}
+ & Overall             & \textbf{63.3} & 37.7 & $-25.7$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -506,35 +526,34 @@ Dressing also changes sign across seeds. This heterogeneity indicates that
 target effects can resolve severe failures of a direct policy, but can also
 introduce task-dependent interference.
 
-\subsection{Component Ablations}
+\subsection{Effect-Loss-Weight Ablation}
 
-Table~\ref{tab:ablations} isolates the contribution of action conditioning,
-structured effect values, present-versus-future target information, and
-autoregressive horizon modeling. Each learned variant will use the same
-initialization, training budget, and evaluation protocol as the full model.
+Table~\ref{tab:ablations} reports seed-1000 sensitivity to $\lambda_E$; the
+training recipe is otherwise matched within each benchmark.
 
 \begin{table}[t]
-\caption{Matched component ablations on LIBERO-Object. Blank cells denote
-experiments that have not yet been completed.}
+\caption{Seed-1000 effect-loss-weight ablation. Blank cells are ongoing RoboCasa
+runs. LIBERO evaluation batch size is 20 for $\lambda_E=0.3$ and 10 otherwise.}
 \label{tab:ablations}
 \centering
-\small
-\begin{tabular}{lrr}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{crrrr}
 \toprule
-Variant & Success & $\Delta$ vs. PI0.5 \\
+& \multicolumn{2}{c}{LIBERO-Object} & \multicolumn{2}{c}{RoboCasa} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+$\lambda_E$ & Success & $\Delta$ & Success & $\Delta$ \\
 \midrule
-Auxiliary-only              & & \\
-Value-Free Tokens           & & \\
-Current-target conditioning & & \\
-Non-autoregressive effects  & & \\
-\midrule
-Full \method{}              & 84.3\% & $+13.4$ \\
+0.1 & 78.4 & $+7.6$ & & \\
+0.3 & 74.8 & $+4.0$ & & \\
+1.0 & 83.6 & $+12.8$ & 41.0 & $-19.0$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\draftnote{Populate Table~\ref{tab:ablations} with separately trained,
-recipe-matched checkpoints and independent training-seed replications.}
+\draftnote{Complete the $\lambda_E=0.1$ and $0.3$ RoboCasa evaluations, rerun
+the LIBERO-Object $\lambda_E=0.3$ setting with batch size 10, and extend all
+weights to evaluation seed groups 2000 and 3000.}
 
 \subsection{Action Sensitivity Analysis}
 
