@@ -1,9 +1,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ArTE-VLA draft for an intended ICRA 2027 submission.
 % Internal drafting notes should remain in comments rather than visible prose.
-% Before submission: add independent training-seed results, complete ablations,
-% replace the author block, add the architecture figure, and verify the final
-% ICRA format and bibliography.
+% Before submission: add independent training-seed results, replace the author
+% block, and verify the final ICRA format and bibliography.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[letterpaper,10pt,conference]{ieeeconf}
@@ -15,6 +14,7 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{multirow}
+\usepackage{placeins}
 \usepackage{url}
 \usepackage{xcolor}
 
@@ -110,6 +110,8 @@ same RGB observations, instruction, and robot state as vanilla PI0.5
 \cite{pi05}. Consequently, structured physical supervision can shape the policy
 without introducing an object detector, simulator state, task identifier, or
 ground-truth target state into the deployed model.
+Figure~\ref{fig:overview} summarizes the resulting target-to-effect-to-action
+pathway and its separation between training supervision and deployment inputs.
 
 Our main contributions are:
 \begin{itemize}
@@ -127,6 +129,20 @@ Our main contributions are:
     paired episodes per method, while revealing substantial variation across
     target objects.
 \end{itemize}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth,trim=0 0 0 55,clip]{overview.pdf}
+    \caption{Overview of \method{}. (a) Dual-view RGB observations, the
+    instruction, and robot state form the original PI0.5 prefix $X_t$.
+    (b) Masked pooling and an implicit target head seed a four-horizon
+    autoregressive effect chain; each hidden state and predicted 13-D effect are
+    projected into an effect token. (c) The effect tokens augment $X_t$ and
+    condition the flow-matching action expert, which generates the complete
+    action chunk. The dashed path denotes simulator-derived effect labels and
+    validity masks used only during training.}
+    \label{fig:overview}
+\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{RELATED WORK}
@@ -179,6 +195,17 @@ compact supervision and action-conditioning bottleneck.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{METHOD}
 \label{sec:method}
+
+Figure~\ref{fig:overview} shows the complete computation. \method{} preserves
+the original PI0.5 visual-language prefix and adds a target-effect branch between
+prefix encoding and action generation. This branch infers a compact target
+latent, predicts four temporally ordered physical effects, and projects each
+prediction with its horizon-specific hidden state into a token appended to the
+original prefix. The action expert therefore retains the original multimodal
+context while receiving a structured prediction of the target's future. During
+training, simulator replay supervises the effect predictions through an
+auxiliary loss; at deployment, every conditioning effect is model-predicted and
+no simulator-derived quantity is required.
 
 \subsection{Problem Formulation}
 
@@ -372,10 +399,6 @@ contexts; its visual, language, and current-state information is never swapped.
 The resulting tests distinguish dependence on the overall token pathway from
 sensitivity to explicit physical values and their temporal organization.
 
-\draftnote{Add the main architecture figure showing the PI0.5 backbone, implicit
-target representation, four autoregressive effect steps, action conditioning,
-and the training-only simulator-supervision pathway.}
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{EXPERIMENTS}
 \label{sec:experiments}
@@ -397,18 +420,44 @@ Counter to Stove, Drawer to Counter, Sink to Counter, and Toaster to Counter.
 \subsubsection{Training Setup}
 
 Both vanilla PI0.5 and \method{} are initialized from
-\texttt{lerobot/pi05\_base} and fine-tuned for 30,000 updates using eight NVIDIA
-H20 GPUs, global batch size 64, bfloat16 precision, and seed 1000. We use the same
-optimizer, learning-rate schedule, image resolution, action chunk length of 16,
-and five executed actions per inference call. \method{} adds the target head,
-effect chain, effect-token projection, and the auxiliary loss in
-Eq.~\eqref{eq:objective}; the remaining training recipe is unchanged. For the
-RoboCasa study, both policies use seed-1000 checkpoints trained for 15,000
-updates with global batch size 128; their within-benchmark recipes are matched.
+\texttt{lerobot/pi05\_base} and jointly fine-tune the complete model; we use
+neither parameter-efficient adaptation nor a frozen vision encoder. Within each
+benchmark, \method{} differs from vanilla PI0.5 only by the target head, effect
+chain, effect-token projection, and the auxiliary loss in
+Eq.~\eqref{eq:objective}. The benchmark-specific settings are summarized below.
 
-\draftnote{Add the exact optimizer, learning rate and schedule, weight decay,
-image resolution, augmentation, checkpoint-selection rule, wall-clock training
-cost, and trainable-parameter overhead for reproducibility.}
+\begin{center}
+\footnotesize
+\textbf{Benchmark-specific training configurations}\par\smallskip
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Setting & LIBERO-Object & RoboCasa \\
+\midrule
+Updates & 30,000 & 15,000 \\
+GPUs & 8 & 8 \\
+Global batch size & 64 & 128 \\
+Per-GPU batch size & 8 & 16 \\
+Camera views & 2 & 3 \\
+Image size (stored/model) & 256/224 & 256/224 \\
+Warmup/decay steps & 1,000/30,000 & 500/15,000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All runs use AdamW with peak learning rate $2.5\times10^{-5}$, weight decay
+$0.01$, $\beta=(0.9,0.95)$, $\epsilon=10^{-8}$, and global gradient-norm clipping
+at 1.0. After the tabulated linear warmup, the learning rate follows cosine decay
+to $2.5\times10^{-6}$. All runs use bfloat16 precision, gradient checkpointing,
+seed 1000, and no random image augmentation. Square images are resized with
+aspect-preserving padding; LIBERO-Object uses workspace and wrist views, whereas
+RoboCasa uses two agent views and one eye-in-hand view.
+
+We evaluate the final checkpoint without validation-based model selection or
+online environment evaluation during training. Vanilla PI0.5 has 4.143B
+trainable parameters; \method{} has 4.149B, adding 5.381M parameters (0.13\%).
+Steady-state checkpoint intervals indicate approximate eight-H20 training times
+of 12.5 hours for the LIBERO-Object vanilla model and 14.1 hours for \method{}.
 
 \subsubsection{Evaluation Protocol}
 
@@ -431,36 +480,30 @@ seed groups 1000, 2000, and 3000. This gives 100 episodes per method and seed
 group, or 300 episodes per method overall. The two methods use identical reset
 seeds and environment-provided instructions.
 
-\subsubsection{Baselines and Ablations}
+\subsubsection{Baseline and Ablation}
 
-The primary baseline is recipe-matched vanilla PI0.5. To distinguish future
-prediction from auxiliary regularization and added capacity, the complete study
-also considers an effect predictor that does not condition actions, learned
-context tokens without structured values, current-target-state conditioning,
-non-autoregressive horizon prediction, and a privileged ground-truth-effect
-oracle. We evaluate removal, zero-value, reverse-order, and cross-sample shuffle
-interventions on the same \method{} checkpoint. These comparisons isolate three
-questions: whether the additional pathway improves control, whether future
-structure matters beyond additional tokens, and whether the trained action
-expert uses the predicted values.
-
-\draftnote{Run and report every baseline and ablation named above, including
-capacity-matched and value-free controls. Remove any comparison from the prose
-if it is not completed.}
+The primary baseline is recipe-matched vanilla PI0.5. The only separately
+trained ablation varies the auxiliary effect-loss weight over
+$\lambda_E\in\{0.1,0.3,1.0\}$ while holding the remaining recipe fixed. We also
+apply removal, zero-value, reverse-order, and cross-sample shuffle interventions
+to the same \method{} checkpoint; these are inference-time sensitivity tests,
+not separately trained ablations. The weight sweep tests optimization
+sensitivity, while the interventions test whether the trained action expert
+responds to the effect-token pathway and its explicit values. Because we do not
+include capacity-matched or structural controls, these experiments do not
+isolate the contributions of added parameters, autoregression, or hidden effect
+context.
 
 \subsubsection{Metrics}
 
-Closed-loop success is the primary metric. For effect prediction, we measure
-translation average and final displacement error, rotation error, linear and
-angular velocity error, and activity precision and recall. We also
-report prediction improvement over a zero-motion baseline. Intervention effects
-are measured by the fraction of changed action chunks, maximum absolute action
-difference, and relative root-mean-square (RMS) distance. Efficiency is measured
-with trainable parameter count, inference latency, and peak accelerator memory.
-
-\draftnote{Add the effect-prediction and efficiency results promised by this
-section, with per-horizon errors, a zero-motion comparison, parameter overhead,
-latency, and peak memory; otherwise remove unreported metrics.}
+Closed-loop success is the primary metric. We report per-task and aggregate
+success, together with the absolute percentage-point difference from vanilla
+PI0.5. For the paired LIBERO-Object rollouts, we additionally report rescue and
+regression counts and an exact two-sided McNemar test. Action sensitivity is
+measured by the fraction of action chunks with any numerical change, the maximum
+absolute elementwise difference, and the relative root-mean-square (RMS)
+distance; the latter two are summarized by their medians across observations.
+Trainable-parameter overhead is reported in the training setup.
 
 \subsection{Closed-Loop Performance}
 
@@ -512,10 +555,6 @@ Benchmark & Task & PI0.5 & \method{} & $\Delta$ vs. PI0.5 \\
 \end{tabular}
 \end{table*}
 
-\draftnote{Repeat the full training with independent initialization seeds. Add
-a separate standard-LIBERO-initialization evaluation; do not merge it with the
-expert-demonstration-reset protocol used in Table~\ref{tab:main_results}.}
-
 The aggregate improvement is dominated by two large rescues. On Butter and
 Chocolate Pudding, vanilla PI0.5 achieves only 4.7\% and 14.7\%, whereas
 \method{} reaches 90.0\% and 86.7\%, respectively. The gain is therefore not a
@@ -526,14 +565,17 @@ Dressing also changes sign across seeds. This heterogeneity indicates that
 target effects can resolve severe failures of a direct policy, but can also
 introduce task-dependent interference.
 
-\subsection{Effect-Loss-Weight Ablation}
+\subsection{Effect-Loss Ablation and Action Sensitivity}
 
+\paragraph{Effect-loss weight}
 Table~\ref{tab:ablations} reports seed-1000 sensitivity to $\lambda_E$; the
-training recipe is otherwise matched within each benchmark.
+training recipe is otherwise matched within each benchmark. Additional
+evaluation seed groups are not complete for every weight, so we restrict this
+comparison to the shared seed-1000 setting.
 
 \begin{table}[t]
-\caption{Seed-1000 effect-loss-weight ablation. Blank cells are ongoing RoboCasa
-runs. LIBERO evaluation batch size is 20 for $\lambda_E=0.3$ and 10 otherwise.}
+\caption{Seed-1000 effect-loss-weight ablation. LIBERO evaluation batch size is
+20 for $\lambda_E=0.3$ and 10 otherwise.}
 \label{tab:ablations}
 \centering
 \footnotesize
@@ -544,18 +586,14 @@ runs. LIBERO evaluation batch size is 20 for $\lambda_E=0.3$ and 10 otherwise.}
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 $\lambda_E$ & Success & $\Delta$ & Success & $\Delta$ \\
 \midrule
-0.1 & 78.4 & $+7.6$ & & \\
-0.3 & 74.8 & $+4.0$ & & \\
+0.1 & 78.4 & $+7.6$ & 50.0 & $-10.0$ \\
+0.3 & 74.8 & $+4.0$ & 44.0 & $-16.0$ \\
 1.0 & 83.6 & $+12.8$ & 41.0 & $-19.0$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\draftnote{Complete the $\lambda_E=0.1$ and $0.3$ RoboCasa evaluations, rerun
-the LIBERO-Object $\lambda_E=0.3$ setting with batch size 10, and extend all
-weights to evaluation seed groups 2000 and 3000.}
-
-\subsection{Action Sensitivity Analysis}
+\paragraph{Action sensitivity}
 
 We perform a fixed-noise action audit on 32 observations drawn equally from
 Butter and Chocolate Pudding. Repeating the unmodified forward computation gives
@@ -593,77 +631,69 @@ horizon context, and the zero-value median lies slightly below the prespecified
 task distribution are therefore necessary to quantify the independent control
 value of the structured prediction.
 
-\draftnote{Extend the value intervention beyond the current 32 observations and
-two tasks. Run all-task action audits and closed-loop mask, zero-value,
-reverse-order, and cross-sample-shuffle interventions before making an
-independent value-use claim.}
+\FloatBarrier
+\subsection{Discussion and Limitations}
 
-\subsection{Task-Level Analysis}
+The task-level results show that the aggregate LIBERO-Object gain is not a
+uniform improvement. The large rescues on Butter and Chocolate Pudding are
+consistent with target-effect supervision providing an additional object-motion
+signal when the direct policy fails. By contrast, the regressions on Ketchup,
+Milk, and BBQ Sauce could reflect inaccurate target effects, entanglement of
+object and task context in the implicit target representation, or competition
+between effect and visual-language tokens inside the action expert. These
+explanations remain hypotheses: distinguishing them requires comparing effect
+error and action sensitivity on matched rescue and regression episodes.
 
-The paired outcomes suggest two complementary failure modes. For tasks on which
-vanilla PI0.5 rarely succeeds, target-effect supervision may provide an
-additional object-motion signal that disambiguates action generation. Conversely,
-the regressions on Ketchup, Milk, and BBQ Sauce may arise from inaccurate target
-effects, an implicit target representation that entangles object and task
-context, or competition between effect and visual-language tokens inside the
-action expert. Separating these explanations requires comparing effect error and
-action sensitivity on matched rescue and regression episodes.
+The experimental evidence has several further limits. All reported models use
+one training seed; Table~\ref{tab:main_results} varies only rollout seeds and
+uses an expert-demonstration reset protocol, while the weight comparison in
+Table~\ref{tab:ablations} is restricted to the shared seed-1000 evaluation.
+The current experiments also lack capacity-matched, value-free, and structural
+controls. Consequently, they do not isolate the contribution of explicit
+physical values from added capacity, autoregressive prediction, or the learned
+horizon context carried by each effect token. Likewise, the 32-observation
+audit establishes computational dependence rather than an independent
+closed-loop benefit of the predicted values.
 
-\draftnote{Add the matched rescue/regression diagnostic proposed above,
-including effect-error correlations and representative qualitative rollouts;
-otherwise keep these failure explanations explicitly speculative.}
+Finally, effect supervision relies on privileged object states available in
+simulation or instrumented datasets. Extending the method to unconstrained
+real-world data would require reliable state estimation or pseudo-labeling.
+Independent training-seed replication, standard-initialization evaluation,
+completed cross-benchmark weight sweeps, matched controls, and closed-loop
+interventions over the full task distribution are needed to establish
+robustness, causal attribution, and generalization.
 
 \section{CONCLUSION}
 \label{sec:conclusion}
 
-We presented \method{}, a VLA architecture that predicts a compact physical
-future for the language-referred target and uses that prediction to condition
-action generation. The method requires privileged object states only for
-training-time supervision and retains the original RGB-language interface at
-inference. On LIBERO-Object, \method{} improves aggregate success from 70.9\% to
-84.3\% over three evaluation seeds, while fixed-noise interventions show that
-the action expert responds consistently to changes in the predicted effects.
+We presented \method{}, a VLA architecture that inserts a structured physical
+prediction pathway between visual-language understanding and continuous action
+generation. From the multimodal context, the model forms an implicit
+representation of the language-referred target, autoregressively predicts a
+compact chain of target effects at four future horizons, and conditions the
+action expert on the resulting tokens. Privileged object states are used only to
+construct training targets, so inference retains the original RGB-language
+interface without requiring an external detector or state estimator.
 
-These results support a narrow conclusion: an autoregressive target-effect
-pathway can improve aggregate control performance and measurably influence the
-action computation. They do not yet show that future physical values are
-uniformly beneficial across tasks or solely responsible for the improvement.
-The regressions on several target objects and the learned horizon context carried
-by each effect token require matched auxiliary, capacity, and value-free controls
-before the contribution of explicit effect values can be isolated.
+On LIBERO-Object, \method{} improves aggregate success from 70.9\% to 84.3\%
+over three evaluation seeds. Across 1,500 paired rollouts, it produces 380
+rescues and 179 regressions, with a significant exact McNemar test. In the
+shared seed-1000 setting, all three tested effect-loss weights outperform the
+recipe-matched baseline on LIBERO-Object. Fixed-noise interventions further show
+that perturbing effect values or their temporal order changes the generated
+action chunks consistently. This establishes that the action expert uses the
+effect pathway computationally, although the current audit does not isolate an
+independent closed-loop benefit of the explicit physical values.
 
-The method also relies on privileged target-effect labels during training. This
-supervision is compatible with simulation and instrumented robot datasets, but
-application to unconstrained real-world data would require state estimation or
-pseudo-labeling. Moreover, the implicit target representation does not expose a
-calibrated present-time object pose. An explicit target estimator could improve
-interpretability, but would introduce association and geometry errors that the
-current architecture avoids.
-
-Finally, Table~\ref{tab:main_results} uses one training seed, three stochastic
-evaluation seeds, and an expert-demonstration reset protocol. The repeated
-evaluations show that the aggregate gain is not specific to one rollout seed,
-but they do not establish robustness to training initialization or standard
-LIBERO initial states. Independent training-seed replication, completed matched
-controls, standard-protocol evaluation, and tests beyond LIBERO-Object are
-therefore necessary to establish robustness and generalization. Within these
-limits, the results motivate structured future effects as an inspectable
-interface between visual-language understanding and continuous robot control.
-
-\draftnote{Add standard LIBERO initial-state results, held-out task suites, and
-cross-simulator evaluation, or narrow the final generalization claims to the
-current LIBERO-Object expert-reset setting.}
-
-\draftnote{Revise the conclusion after the outstanding replications, ablations,
-and interventions; ensure that no final claim exceeds the completed evidence.}
-
-\draftnote{Complete the bibliography audit: expand coverage, replace arXiv
-entries with archival publication data where available, and verify author lists,
-titles, years, and identifiers.}
-
-\draftnote{Before submission, set \texttt{\string\draftnotesfalse}, confirm the
-anonymous author block for review, remove identifying metadata and comments,
-and rerun the PaperPlaza PDF compliance check.}
+The evidence therefore supports a focused conclusion: structured,
+autoregressive target effects can improve aggregate control performance while
+providing an inspectable intermediate representation for action generation. It
+does not yet establish uniform gains across tasks, robustness across training
+initializations, or causal attribution to the continuous effect values alone.
+Addressing these questions with matched structural controls, independent
+training seeds, standard benchmark initializations, and full-distribution
+closed-loop interventions is an important next step toward determining when
+effect-conditioned VLAs generalize reliably beyond the present setting.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliographystyle{IEEEtran}
