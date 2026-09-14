@@ -57,6 +57,8 @@ training but are not required at inference. Across three evaluation seeds on
 all ten LIBERO-Object tasks, \method{} improves the success rate of a
 recipe-matched PI0.5 baseline from 70.9\% to 84.3\%, a 13.4
 percentage-point gain over 1,500 paired episodes per method.
+On the five-task RoboCasa PickPlace family, it improves aggregate success from
+63.3\% to 67.0\%, with gains on four of five tasks.
 Fixed-noise
 interventions further show that changing the predicted effect values produces
 consistent changes in generated actions. These results suggest that a compact,
@@ -124,10 +126,10 @@ Our main contributions are:
     \item We formulate context-preserving effect-value interventions that
     distinguish reliance on the overall effect-token pathway from sensitivity
     to explicit physical values and their temporal order.
-    \item On LIBERO-Object \cite{libero}, \method{} improves a matched PI0.5
-    baseline by 13.4 percentage points across three evaluation seeds and 1,500
-    paired episodes per method, while revealing substantial variation across
-    target objects.
+    \item Across three evaluation seed groups, \method{} improves a matched
+    PI0.5 baseline by 13.4 percentage points on LIBERO-Object \cite{libero} and
+    3.7 points on RoboCasa PickPlace-5, while revealing benchmark-dependent
+    loss-weight sensitivity and substantial task-level variation.
 \end{itemize}
 
 \begin{figure*}[t]
@@ -343,7 +345,9 @@ where $\rho$ is Smooth-$L_1$. The full end-to-end objective is
 +\lambda_E\bigl(\mathcal{L}_{\mathrm{reg}}+\mathcal{L}_{\mathrm{act}}\bigr),
 \label{eq:objective}
 \end{equation}
-with $\lambda_E=1$. The reported model applies no component- or class-specific
+The main results use $\lambda_E=1$ for LIBERO-Object and $\lambda_E=0.1$ for
+RoboCasa; Table~\ref{tab:ablations} reports all three tested weights on both
+benchmarks. The reported models apply no component- or class-specific
 reweighting: all 12 continuous dimensions are weighted equally, including for
 inactive targets, and positive and negative activity labels receive equal weight
 before the valid-horizon normalization above. All three loss terms are optimized
@@ -424,11 +428,14 @@ Both vanilla PI0.5 and \method{} are initialized from
 neither parameter-efficient adaptation nor a frozen vision encoder. Within each
 benchmark, \method{} differs from vanilla PI0.5 only by the target head, effect
 chain, effect-token projection, and the auxiliary loss in
-Eq.~\eqref{eq:objective}. The benchmark-specific settings are summarized below.
+Eq.~\eqref{eq:objective}. The benchmark-specific settings are summarized in
+Table~\ref{tab:training_config}.
 
-\begin{center}
+\begin{table}[t]
+\caption{Benchmark-specific training configurations.}
+\label{tab:training_config}
+\centering
 \footnotesize
-\textbf{Benchmark-specific training configurations}\par\smallskip
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}lcc@{}}
 \toprule
@@ -443,7 +450,8 @@ Image size (stored/model) & 256/224 & 256/224 \\
 Warmup/decay steps & 1,000/30,000 & 500/15,000 \\
 \bottomrule
 \end{tabular}
-\end{center}
+\vspace{-2mm}
+\end{table}
 
 All runs use AdamW with peak learning rate $2.5\times10^{-5}$, weight decay
 $0.01$, $\beta=(0.9,0.95)$, $\epsilon=10^{-8}$, and global gradient-norm clipping
@@ -510,17 +518,21 @@ Trainable-parameter overhead is reported in the training setup.
 Table~\ref{tab:main_results} compares \method{} with recipe-matched vanilla
 PI0.5 on LIBERO-Object and five RoboCasa pick-and-place tasks.
 Across the three evaluation seeds, target-effect conditioning improves mean
-success from 70.9\% to 84.3\%, an absolute gain of 13.4 percentage points.
+LIBERO-Object success from 70.9\% to 84.3\%, an absolute gain of 13.4 percentage
+points.
 The gains for seeds 1000, 2000, and 3000 are
 12.8, 14.8, and 12.6 points, respectively. Pooling the 1,500 paired rollouts,
 \method{} produces 380 rescues and 179 regressions. The corresponding exact
-two-sided McNemar test yields $p=1.20\times10^{-17}$.
+two-sided McNemar test yields $p=1.20\times10^{-17}$. On RoboCasa PickPlace-5,
+aggregate success increases from 63.3\% to 67.0\%, a 3.7-point gain averaged
+over the same three evaluation seed groups.
 
 \begin{table*}[t]
 \caption{Success (\%) on LIBERO-Object and RoboCasa PickPlace-5 across three
 evaluation seed groups using fixed seed-1000 training checkpoints. Entries are
 means across seeds. Each LIBERO-Object seed contains 50 paired episodes per task;
-each RoboCasa seed contains 20.}
+each RoboCasa seed contains 20. The reported \method{} setting uses
+$\lambda_E=1$ on LIBERO-Object and $\lambda_E=0.1$ on RoboCasa.}
 \label{tab:main_results}
 \centering
 \small
@@ -544,13 +556,13 @@ Benchmark & Task & PI0.5 & \method{} & $\Delta$ vs. PI0.5 \\
  & Overall             & 70.9 & \textbf{84.3} & $+13.4$ \\
 \midrule
 \multirow{5}{*}{RoboCasa}
- & Counter to Cabinet  & 41.7 & 25.0 & $-16.7$ \\
- & Counter to Stove    & 76.7 & 28.3 & $-48.3$ \\
- & Drawer to Counter   & 40.0 & 16.7 & $-23.3$ \\
- & Sink to Counter     & 70.0 & 45.0 & $-25.0$ \\
- & Toaster to Counter  & 88.3 & 73.3 & $-15.0$ \\
+ & Counter to Cabinet  & 41.7 & 51.7 & $+10.0$ \\
+ & Counter to Stove    & 76.7 & 81.7 & $+5.0$ \\
+ & Drawer to Counter   & 40.0 & 41.7 & $+1.7$ \\
+ & Sink to Counter     & 70.0 & 68.3 & $-1.7$ \\
+ & Toaster to Counter  & 88.3 & 91.7 & $+3.4$ \\
 \cmidrule(lr){2-5}
- & Overall             & \textbf{63.3} & 37.7 & $-25.7$ \\
+ & Overall             & 63.3 & \textbf{67.0} & $+3.7$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -565,17 +577,23 @@ Dressing also changes sign across seeds. This heterogeneity indicates that
 target effects can resolve severe failures of a direct policy, but can also
 introduce task-dependent interference.
 
+RoboCasa shows a smaller but more consistent aggregate gain: \method{} improves
+four of the five tasks, led by a 10.0-point gain on Counter to Cabinet, while
+Sink to Counter decreases by 1.7 points. Thus, the updated cross-benchmark
+results support a positive aggregate effect on both benchmarks, but neither a
+uniform per-task benefit nor a benchmark-independent choice of loss weight.
+
 \subsection{Effect-Loss Ablation and Action Sensitivity}
 
 \paragraph{Effect-loss weight}
-Table~\ref{tab:ablations} reports seed-1000 sensitivity to $\lambda_E$; the
-training recipe is otherwise matched within each benchmark. Additional
-evaluation seed groups are not complete for every weight, so we restrict this
-comparison to the shared seed-1000 setting.
+Table~\ref{tab:ablations} reports sensitivity to $\lambda_E$ across the three
+evaluation seed groups; the training recipe is otherwise matched within each
+benchmark.
 
 \begin{table}[t]
-\caption{Seed-1000 effect-loss-weight ablation. LIBERO evaluation batch size is
-20 for $\lambda_E=0.3$ and 10 otherwise.}
+\caption{Effect-loss-weight ablation averaged across evaluation seed groups
+1000, 2000, and 3000. LIBERO evaluation batch size is 20 for
+$\lambda_E=0.3$ and 10 otherwise.}
 \label{tab:ablations}
 \centering
 \footnotesize
@@ -586,12 +604,19 @@ comparison to the shared seed-1000 setting.
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}
 $\lambda_E$ & Success & $\Delta$ & Success & $\Delta$ \\
 \midrule
-0.1 & 78.4 & $+7.6$ & 50.0 & $-10.0$ \\
-0.3 & 74.8 & $+4.0$ & 44.0 & $-16.0$ \\
-1.0 & 83.6 & $+12.8$ & 41.0 & $-19.0$ \\
+0.1 & 78.4 & $+7.5$ & \textbf{67.0} & $+3.7$ \\
+0.3 & 74.8 & $+3.9$ & 62.0 & $-1.3$ \\
+1.0 & \textbf{84.3} & $+13.4$ & 57.7 & $-5.6$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+All three weights improve over vanilla PI0.5 on LIBERO-Object, with the largest
+gain at $\lambda_E=1.0$. RoboCasa exhibits the opposite ordering: only
+$\lambda_E=0.1$ improves over the baseline, whereas 0.3 and 1.0 reduce aggregate
+success by 1.3 and 5.6 points. This cross-benchmark reversal motivates the
+benchmark-specific settings reported in Table~\ref{tab:main_results} and shows
+that stronger effect supervision is not uniformly preferable.
 
 \paragraph{Action sensitivity}
 
@@ -631,7 +656,71 @@ horizon context, and the zero-value median lies slightly below the prespecified
 task distribution are therefore necessary to quantify the independent control
 value of the structured prediction.
 
-\FloatBarrier
+\subsection{Qualitative Effect Inspection}
+
+Figures~\ref{fig:effect_agentview} and~\ref{fig:effect_signature} inspect one
+activity-positive state from the Butter training demonstrations. The example is
+selected deterministically as the midpoint of the activity-positive frames for
+this task, rather than by prediction error. In the agent-view projection,
+predicted and teacher target endpoints differ by 0.57 and 0.23 pixels at 0.4
+and 0.8~s, respectively. The 1.6-s prediction follows the same displacement
+direction but is 4.71 pixels short of the teacher endpoint. The channel-wise
+signature shows the same pattern: the model captures the dominant increase in
+translation across horizons, while underestimating long-horizon displacement
+and rotation. All four activity probabilities exceed 0.99998 and agree with the
+positive labels.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.94\textwidth]{implicit_target_effect_agentview_4h.pdf}
+    \caption{Agent-view projection of four-horizon implicit target effects for
+    one Butter training state. The first row shows simulator teacher effects and
+    the second row shows model predictions. Colored arrows represent target
+    displacement, dashed arrows represent future linear velocity, and short
+    dark segments indicate the projected target $x$-axis. The current target
+    pose and camera calibration are used only for visualization projection and
+    are not model inputs.}
+    \label{fig:effect_agentview}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{implicit_target_effect_heatmap.pdf}
+    \caption{Implicit target-effect signatures for the state in
+    Fig.~\ref{fig:effect_agentview}. Rows denote the four future horizons, and
+    columns encode translation, rotation, linear velocity, angular velocity,
+    and activity. Continuous teacher and prediction channels use shared
+    group-wise scales; the activity column shows the binary teacher label or
+    predicted probability. Future-effect labels are used only to form the
+    teacher and error panels and are not provided to the prediction path.}
+    \label{fig:effect_signature}
+\end{figure*}
+
+Figure~\ref{fig:effect_spatial} complements the value-space inspection with an
+input-space perturbation test. We independently replace each cell of an
+$8\times8$ grid in the agent or wrist view with that view's mean RGB value and
+measure the RMS change in the predicted translation chain over all four
+horizons. The strongest agent-view response lies near the manipulated object,
+while the wrist-view response is concentrated in the near-field interaction
+region. Thus, localized image regions influence the implicit effect prediction
+in both views. This diagnostic uses neither teacher effects nor target
+locations, but it is an occlusion-sensitivity map, not an attention map or an
+explicit localization output.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{implicit_target_effect_spatial_heatmap.pdf}
+    \caption{Spatial occlusion sensitivity of the implicit target-effect
+    prediction for the state in Figs.~\ref{fig:effect_agentview}
+    and~\ref{fig:effect_signature}. Each heatmap reports the RMS change, in
+    millimeters, of the predicted four-horizon target translation chain after
+    independently occluding an $8\times8$ grid cell. Both views share the same
+    color scale; warmer regions have greater influence on the prediction. No
+    teacher effect, target position, segmentation, or simulator state is used
+    to compute the sensitivity.}
+    \label{fig:effect_spatial}
+\end{figure}
+
 \subsection{Discussion and Limitations}
 
 The task-level results show that the aggregate LIBERO-Object gain is not a
@@ -643,11 +732,15 @@ object and task context in the implicit target representation, or competition
 between effect and visual-language tokens inside the action expert. These
 explanations remain hypotheses: distinguishing them requires comparing effect
 error and action sensitivity on matched rescue and regression episodes.
+On RoboCasa, four tasks improve and one decreases slightly, but the loss-weight
+sweep reverses the LIBERO ordering. This indicates that the balance between the
+action and auxiliary objectives is benchmark dependent even when the target
+effect representation is unchanged.
 
 The experimental evidence has several further limits. All reported models use
 one training seed; Table~\ref{tab:main_results} varies only rollout seeds and
-uses an expert-demonstration reset protocol, while the weight comparison in
-Table~\ref{tab:ablations} is restricted to the shared seed-1000 evaluation.
+uses benchmark-specific reset protocols. Table~\ref{tab:ablations} likewise
+varies evaluation seeds rather than independent training initializations.
 The current experiments also lack capacity-matched, value-free, and structural
 controls. Consequently, they do not isolate the contribution of explicit
 physical values from added capacity, autoregressive prediction, or the learned
@@ -659,10 +752,11 @@ Finally, effect supervision relies on privileged object states available in
 simulation or instrumented datasets. Extending the method to unconstrained
 real-world data would require reliable state estimation or pseudo-labeling.
 Independent training-seed replication, standard-initialization evaluation,
-completed cross-benchmark weight sweeps, matched controls, and closed-loop
+principled loss-weight selection, matched controls, and closed-loop
 interventions over the full task distribution are needed to establish
 robustness, causal attribution, and generalization.
 
+\FloatBarrier
 \section{CONCLUSION}
 \label{sec:conclusion}
 
@@ -678,11 +772,13 @@ interface without requiring an external detector or state estimator.
 On LIBERO-Object, \method{} improves aggregate success from 70.9\% to 84.3\%
 over three evaluation seeds. Across 1,500 paired rollouts, it produces 380
 rescues and 179 regressions, with a significant exact McNemar test. In the
-shared seed-1000 setting, all three tested effect-loss weights outperform the
-recipe-matched baseline on LIBERO-Object. Fixed-noise interventions further show
-that perturbing effect values or their temporal order changes the generated
-action chunks consistently. This establishes that the action expert uses the
-effect pathway computationally, although the current audit does not isolate an
+same three-seed evaluation, RoboCasa aggregate success improves from 63.3\% to
+67.0\%, with gains on four of five tasks. All three tested effect-loss weights
+outperform the recipe-matched baseline on LIBERO-Object, whereas only the
+smallest weight does so on RoboCasa. Fixed-noise interventions further show that
+perturbing effect values or their temporal order changes the generated action
+chunks consistently. This establishes that the action expert uses the effect
+pathway computationally, although the current audit does not isolate an
 independent closed-loop benefit of the explicit physical values.
 
 The evidence therefore supports a focused conclusion: structured,
