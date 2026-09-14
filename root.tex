@@ -47,7 +47,7 @@ Vision-language-action (VLA) models typically generate robot actions directly
 from visual observations and language instructions, leaving the intended
 physical evolution of the scene implicit. We introduce \method{}, a VLA that
 predicts how the language-referred target should change before generating an
-action. Given dual-view RGB observations and an instruction, \method{} infers an
+action. Given multi-view RGB observations and an instruction, \method{} infers an
 implicit target representation and autoregressively predicts target effects at
 four future horizons. Each effect describes translation, rotation, linear and
 angular velocity, and activity. The predicted effects are embedded as tokens and
@@ -112,8 +112,6 @@ same RGB observations, instruction, and robot state as vanilla PI0.5
 \cite{pi05}. Consequently, structured physical supervision can shape the policy
 without introducing an object detector, simulator state, task identifier, or
 ground-truth target state into the deployed model.
-Figure~\ref{fig:overview} summarizes the resulting target-to-effect-to-action
-pathway and its separation between training supervision and deployment inputs.
 
 Our main contributions are:
 \begin{itemize}
@@ -123,20 +121,18 @@ Our main contributions are:
     \item We develop a replay-based labeling pipeline that adds aligned target
     effects to robot demonstrations while preserving their original images,
     actions, states, and language instructions.
-    \item We formulate context-preserving effect-value interventions that
-    distinguish reliance on the overall effect-token pathway from sensitivity
-    to explicit physical values and their temporal order.
-    \item Across three evaluation seed groups, \method{} improves a matched
-    PI0.5 baseline by 13.4 percentage points on LIBERO-Object \cite{libero} and
-    3.7 points on RoboCasa PickPlace-5, while revealing benchmark-dependent
-    loss-weight sensitivity and substantial task-level variation.
+    \item We show that \method{} outperforms a matched PI0.5 baseline on
+    LIBERO-Object \cite{libero} and RoboCasa PickPlace-5. Context-preserving
+    interventions further test sensitivity to predicted effect values and their
+    temporal order.
 \end{itemize}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth,trim=0 0 0 55,clip]{overview.pdf}
-    \caption{Overview of \method{}. (a) Dual-view RGB observations, the
-    instruction, and robot state form the original PI0.5 prefix $X_t$.
+    \caption{Overview of \method{}, illustrated for the dual-view LIBERO
+    setting. (a) Workspace and wrist RGB observations, the instruction, and
+    robot state form the original PI0.5 prefix $X_t$.
     (b) Masked pooling and an implicit target head seed a four-horizon
     autoregressive effect chain; each hidden state and predicted 13-D effect are
     projected into an effect token. (c) The effect tokens augment $X_t$ and
@@ -172,7 +168,7 @@ from web videos and robot trajectories \cite{gr2}; CoT-VLA generates future
 visual goals before actions \cite{cotvla}; and WorldVLA places image and action
 generation in a shared autoregressive formulation \cite{worldvla}. These visual
 futures retain appearance and multi-object context, but also encode scene content
-irrelevant to the commanded manipulation. \cite{xu2026futurevla, finn2017deep} \method{} neither synthesizes future
+irrelevant to the commanded manipulation \cite{xu2026futurevla, finn2017deep}. \method{} neither synthesizes future
 observations nor performs explicit planning with learned dynamics. It predicts a
 low-dimensional physical change for one language-conditioned target and inserts
 it into the action context. Thus, visual prediction preserves rich scene
@@ -211,11 +207,11 @@ no simulator-derived quantity is required.
 
 \subsection{Problem Formulation}
 
-At time $t$, the policy receives workspace and wrist RGB observations
-$I_t=(I_t^{\mathrm{ws}},I_t^{\mathrm{wr}})$, proprioceptive state $s_t$, and a
-language instruction $\ell$. As in PI0.5, the normalized state is discretized
-and included in the language prompt, while both images are encoded into visual
-tokens. Let $X_t=\Phi(I_t,s_t,\ell)$ denote the resulting visual-language
+At time $t$, the policy receives $V$ RGB observations
+$I_t=(I_t^{(1)},\ldots,I_t^{(V)})$, proprioceptive state $s_t$, and a language
+instruction $\ell$. As in PI0.5, the normalized state is discretized and
+included in the language prompt, while each image is encoded into visual tokens.
+Let $X_t=\Phi(I_t,s_t,\ell)$ denote the resulting visual-language
 prefix. A conventional VLA directly models an action chunk
 $A_t=(a_t,\ldots,a_{t+C-1})$ from $X_t$. We instead introduce an intermediate
 target-effect chain $E_t=(e_t^1,\ldots,e_t^H)$ and use the factorization
@@ -342,7 +338,7 @@ $M_{t,h}$. Let $K_t=\max(1,\sum_h M_{t,h})$. The two effect losses are
 where $\rho$ is Smooth-$L_1$. The full end-to-end objective is
 \begin{equation}
 \mathcal{L}=\mathcal{L}_{\mathrm{action}}
-+\lambda_E\bigl(\mathcal{L}_{\mathrm{reg}}+\mathcal{L}_{\mathrm{act}}\bigr),
++\lambda_E\bigl(\mathcal{L}_{\mathrm{reg}}+\mathcal{L}_{\mathrm{act}}\bigr).
 \label{eq:objective}
 \end{equation}
 The main results use $\lambda_E=1$ for LIBERO-Object and $\lambda_E=0.1$ for
@@ -377,12 +373,18 @@ $\|\Delta r_t^h\|_2$ exceeds $1^{\circ}$, $\|v_t^h\|_2$ exceeds $0.01$~m/s, or
 $\|\omega_t^h\|_2$ exceeds $0.05$~rad/s. A horizon is valid only when the same
 target exists at both frames and $t+k_h$ remains inside the episode.
 
+We apply this replay-and-label construction throughout. For each task, the
+manipulated object is resolved to its simulator body; the stored states are then
+restored and Eq.~\eqref{eq:effect_labels} is applied with the same horizons and
+validity rules. The effect schema and deployment inputs therefore remain
+unchanged.
+
 Object names and simulator body identifiers are retained only as enrichment
 provenance. The enriched data preserve the original RGB observations,
 proprioception, actions, instructions, and frame indices. During training, the
 task index identifies the teacher entity in the multi-entity replay tensor. The
-selected labels are then packed into model slot 0, the sole active target slot
-for all ten LIBERO-Object tasks. Neither the task index nor the teacher slot,
+selected labels are then packed into model slot 0, the sole active target slot.
+Neither the task index nor the teacher slot,
 object identity, effect label, or simulator state is embedded by the policy. At
 deployment, the model uses only the same images, instruction, and robot state as
 the PI0.5 baseline.
@@ -391,17 +393,15 @@ the PI0.5 baseline.
 
 To test what information reaches the action expert, we intervene after effect
 prediction while fixing the observation, language, checkpoint, initial action
-noise, and flow-integration schedule. \emph{Mask} hides all effect tokens from
-the action expert, measuring dependence on the added pathway as a whole.
-\emph{Zero-12D} sets only
+noise, and flow-integration schedule. \emph{Zero-12D} sets only
 the 12 continuous values in Eq.~\eqref{eq:effect} to zero while preserving each
 horizon context $c_t^h$ and activity logit. \emph{Reverse} assigns the four
 13-D predictions in reverse temporal order, and \emph{Shuffle} substitutes
 predictions from another sample. For these three effect-value interventions, the
 altered effects are re-encoded with the receiving sample's original hidden
 contexts; its visual, language, and current-state information is never swapped.
-The resulting tests distinguish dependence on the overall token pathway from
-sensitivity to explicit physical values and their temporal organization.
+The resulting tests measure sensitivity to predicted effect values and their
+temporal organization while preserving the original multimodal context.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{EXPERIMENTS}
@@ -493,11 +493,12 @@ seeds and environment-provided instructions.
 The primary baseline is recipe-matched vanilla PI0.5. The only separately
 trained ablation varies the auxiliary effect-loss weight over
 $\lambda_E\in\{0.1,0.3,1.0\}$ while holding the remaining recipe fixed. We also
-apply removal, zero-value, reverse-order, and cross-sample shuffle interventions
-to the same \method{} checkpoint; these are inference-time sensitivity tests,
-not separately trained ablations. The weight sweep tests optimization
-sensitivity, while the interventions test whether the trained action expert
-responds to the effect-token pathway and its explicit values. Because we do not
+apply zero-value, reverse-order, and cross-sample shuffle interventions to the
+same \method{} checkpoint, together with an identical-condition repeat control;
+these are inference-time sensitivity tests, not separately trained ablations.
+The weight sweep tests optimization sensitivity, while the interventions test
+whether the trained action expert responds to predicted effect values and their
+temporal order. Because we do not
 include capacity-matched or structural controls, these experiments do not
 isolate the contributions of added parameters, autoregression, or hidden effect
 context.
@@ -515,14 +516,14 @@ Trainable-parameter overhead is reported in the training setup.
 
 \subsection{Closed-Loop Performance}
 
-Table~\ref{tab:main_results} compares \method{} with recipe-matched vanilla
-PI0.5 on LIBERO-Object and five RoboCasa pick-and-place tasks.
+Table~\ref{tab:main_results} compares the benchmark-wise best of the three
+evaluated \method{} effect-loss weights with recipe-matched vanilla PI0.5 on
+LIBERO-Object and five RoboCasa pick-and-place tasks.
 Across the three evaluation seeds, target-effect conditioning improves mean
 LIBERO-Object success from 70.9\% to 84.3\%, an absolute gain of 13.4 percentage
 points.
-The gains for seeds 1000, 2000, and 3000 are
-12.8, 14.8, and 12.6 points, respectively. Pooling the 1,500 paired rollouts,
-\method{} produces 380 rescues and 179 regressions. The corresponding exact
+Pooling the 1,500 paired rollouts,
+\method{} produces 380 rescues and 179 regressions; the corresponding exact
 two-sided McNemar test yields $p=1.20\times10^{-17}$. On RoboCasa PickPlace-5,
 aggregate success increases from 63.3\% to 67.0\%, a 3.7-point gain averaged
 over the same three evaluation seed groups.
@@ -771,9 +772,10 @@ interface without requiring an external detector or state estimator.
 
 On LIBERO-Object, \method{} improves aggregate success from 70.9\% to 84.3\%
 over three evaluation seeds. Across 1,500 paired rollouts, it produces 380
-rescues and 179 regressions, with a significant exact McNemar test. In the
-same three-seed evaluation, RoboCasa aggregate success improves from 63.3\% to
-67.0\%, with gains on four of five tasks. All three tested effect-loss weights
+rescues and 179 regressions; McNemar's exact two-sided test yields
+$p=1.20\times10^{-17}$. Across three RoboCasa evaluation seed groups, aggregate
+success improves from 63.3\% to 67.0\%, with gains on four of five tasks. All
+three tested effect-loss weights
 outperform the recipe-matched baseline on LIBERO-Object, whereas only the
 smallest weight does so on RoboCasa. Fixed-noise interventions further show that
 perturbing effect values or their temporal order changes the generated action
