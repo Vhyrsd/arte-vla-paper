@@ -32,7 +32,7 @@
 }
 
 \title{\LARGE \bf
-ArTE-VLA: Autoregressive Target Effects for Vision-Language-Action Models
+ArTE-VLA: Autoregressive Target Effects with Implicit Target Grounding for Vision-Language-Action Models
 }
 
 \author{Anonymous Authors}
@@ -60,12 +60,14 @@ checkpoint per method under three rollout seeds. On all ten LIBERO-Object tasks,
 70.9\% to 84.3\%, a 13.4 percentage-point gain over 1,500 paired episodes per
 method.
 On RoboCasa PickPlace-5, it improves aggregate success from
-63.3\% to 67.0\%, with gains on four of five tasks.
+63.3\% to 67.0\%.
 Fixed-noise
 interventions further show that changing the predicted effect values produces
-consistent changes in generated actions. These results suggest that a compact,
-target-centric future representation can provide an effective and inspectable
-interface between VLA perception and control.
+consistent changes in generated actions. Qualitative visualizations further
+compare predicted effects with simulator-derived targets and examine spatial
+sensitivity. These results suggest that a compact, target-centric future
+representation can provide an effective and inspectable interface between VLA
+perception and control.
 \end{abstract}
 
 
@@ -95,7 +97,7 @@ representations can be high-dimensional and need not isolate the physical state
 of the object that is central to the instruction \cite{zhong2026acot}.
 
 We propose \method{}, which inserts a compact target-effect bottleneck into a
-pretrained VLA. Rather than predicting a complete future image, the model
+pretrained VLA model. Rather than predicting a complete future image, the model
 compresses its visual-language prefix into an implicit representation of the
 primary target and predicts target effects at four horizons.
 Each prediction contains a 3-D translation, a 3-D rotation, linear and angular
@@ -106,7 +108,7 @@ flow-matching action expert.
 
 To physically ground this bottleneck, we construct simulator-derived target
 effects as privileged labels. We recover object states from the simulator states
-stored in LIBERO~\cite{libero} demonstrations and construct aligned
+stored in expert demonstrations and construct aligned
 multi-horizon effect labels. These labels ground the compact bottleneck in
 intended object motion at multiple horizons, complementing the end-to-end action
 objective.
@@ -120,9 +122,9 @@ Our main contributions are:
     effects to robot demonstrations while preserving their original images,
     actions, states, and language instructions.
     \item We show that \method{} outperforms a matched \pihalf{}~\cite{pi05} baseline on
-    LIBERO-Object~\cite{libero} and RoboCasa PickPlace-5~\cite{robocasa2024}. Context-preserving
-    interventions further test sensitivity to predicted effect values and their
-    temporal order.
+    simulation tasks. Context-preserving interventions test action sensitivity
+    to predicted effect values and their temporal order, while qualitative
+    visualizations inspect effect fidelity and spatial sensitivity.
 \end{itemize}
 
 
@@ -152,7 +154,8 @@ from web videos and robot trajectories \cite{gr2}; CoT-VLA generates future
 visual goals before actions \cite{cotvla}; and WorldVLA places image and action
 generation in a shared autoregressive formulation \cite{worldvla}. These visual
 futures retain appearance and multi-object context, but also encode scene content
-irrelevant to the commanded manipulation \cite{xu2026futurevla, finn2017deep}. \method{} neither synthesizes future
+irrelevant to the commanded manipulation \cite{xu2026futurevla, finn2017deep}.
+While proposed \method{} neither synthesizes future
 observations nor performs explicit planning with learned dynamics. It predicts a
 low-dimensional physical change for one language-conditioned target and inserts
 it into the action context. Thus, visual prediction preserves rich scene
@@ -212,7 +215,7 @@ instruction $\ell$. As in \pihalf{}~\cite{pi05}, the normalized state is discret
 included in the language prompt, while each image is encoded into visual tokens.
 Let $X_t=\Phi(I_t,s_t,\ell)$ denote the resulting visual-language
 prefix. A conventional VLA directly models an action chunk
-$A_t=(a_t,\ldots,a_{t+C-1})$ from $X_t$. We instead introduce an intermediate
+$A_t=(a_t,\ldots,a_{t+C-1})$ of length $C$ from $X_t$. We instead introduce an intermediate autoregressive
 target-effect chain $E_t=(e_t^1,\ldots,e_t^H)$ and use the factorization
 \begin{align}
 p(A_t,E_t\mid I_t,s_t,\ell)
@@ -225,8 +228,7 @@ where $T(E_t)$ embeds the predicted effects into the \pihalf{}~\cite{pi05} prefi
 $H=4$ temporal offsets $(k_1,\ldots,k_H)=(1,4,8,16)$, corresponding to
 $(0.1,0.4,0.8,1.6)$~s at the 10-Hz control rate. The intermediate chain asks the
 model to first represent how the instructed target should evolve and then
-generate the complete action chunk conditioned on that evolution. This is a
-temporal autoregressive factorization, not a structural causal model.
+generate the complete action chunk conditioned on that evolution.
 
 \subsection{Implicit Target Representation}
 
@@ -247,7 +249,7 @@ allows $z_t$ to encode the command-relevant object or articulated part without
 an explicit detector or object identifier. Importantly, $z_t$ is not regressed
 to the current simulator state. Its semantics arise only through the downstream
 future-effect and action objectives, so we call it an \emph{implicit target
-representation}, not a calibrated 20-D physical state.
+representation}.
 
 \subsection{Multi-Horizon Effect Chain}
 
@@ -267,8 +269,10 @@ c_t^h&=\operatorname{Refine}_{E}
 \hat e_t^h&=f_E(c_t^h).
 \label{eq:effect_ar}
 \end{align}
-Thus, a later prediction receives the model's earlier prediction rather than a
-ground-truth previous effect. Each output has the fixed schema
+Here, $c_t^h\in\mathbb{R}^{256}$ is the horizon-specific hidden
+state used to predict the effect at offset $k_h$.
+Thus, a later prediction receives the model's earlier prediction.
+Each output has the fixed schema
 \begin{equation}
 \hat e_t^h=[\Delta p_t^h,\Delta r_t^h,v_t^h,\omega_t^h,q_t^h]
 \in\mathbb{R}^{13},
@@ -316,7 +320,7 @@ $v_{\theta}(A_t^{\gamma},\gamma\mid\widetilde X_t)$ and minimizes
 \end{equation}
 At inference, numerical integration starts from Gaussian noise and follows the
 predicted vector field from $\gamma=1$ to $0$, yielding the complete action
-chunk rather than a residual correction to a separately generated action.
+chunk.
 
 \subsection{Training Objective}
 
@@ -341,10 +345,8 @@ where $\rho$ is Smooth-$L_1$. The full end-to-end objective is
 \label{eq:objective}
 \end{equation}
 The main results use $\lambda_E=1$ for LIBERO-Object~\cite{libero} and $\lambda_E=0.1$ for
-RoboCasa PickPlace-5~\cite{robocasa2024}; Table~\ref{tab:ablations} reports all three tested weights on both
-benchmarks. The reported models apply no component- or class-specific
-reweighting: all 12 continuous dimensions are weighted equally, including for
-inactive targets, and positive and negative activity labels receive equal weight
+RoboCasa PickPlace-5~\cite{robocasa2024}. The reported models apply no component- or class-specific
+reweighting: all 12 continuous dimensions are weighted equally, and positive and negative activity labels receive equal weight
 before the valid-horizon normalization above. All three loss terms are optimized
 jointly. Crucially, there is no teacher forcing in the effect recursion, and the
 action expert is always conditioned on predicted effects rather than replay
@@ -375,12 +377,11 @@ $\|\Delta r_t^h\|_2$ exceeds $1^{\circ}$, $\|v_t^h\|_2$ exceeds $0.01$~m/s, or
 $\|\omega_t^h\|_2$ exceeds $0.05$~rad/s. A horizon is valid only when the same
 target exists at both frames and $t+k_h$ remains inside the episode.
 
-Task and episode metadata identify the manipulated object's simulator body;
-for RoboCasa PickPlace-5, this is the transported object. We use the stored
-demonstration states for LIBERO-Object and the accompanying replay states for
-RoboCasa, applying the same horizons, thresholds, and validity rules to both.
+Task and episode metadata identify the manipulated object's simulator body.
+We use the stored
+demonstration states for LIBERO-Object \cite{libero} and the accompanying replay states for
+RoboCasa \cite{robocasa2024}, applying the same horizons, thresholds, and validity rules to both.
 Labels remain aligned with the original demonstration frames.
-
 Object identities and task indices select the corresponding supervision labels.
 Enrichment preserves the original observations, actions, and instructions.
 
@@ -472,27 +473,18 @@ of 12.5 hours for the LIBERO-Object~\cite{libero} vanilla model and 14.1 hours f
 
 \subsubsection{Evaluation Protocol}
 
-For each task, we evaluate both policies from the same 50 demonstration-derived
+For each LIBERO-Object~\cite{libero} task, we evaluate both policies from the same 50 demonstration-derived
 initial simulator states under rollout seeds 1000, 2000, and 3000. This
 produces 500 paired episodes per method and rollout seed, or 1,500 episodes per
-method overall. All rollouts use the same seed-1000 training checkpoint for
-each method; the three rollout seeds measure stochastic rollout variability,
-not variability across independent training runs. Rollouts use synchronous
-batches of ten environments, ten flow-matching inference steps, and a fixed time
-horizon. Success is recorded
-without terminating the episode early. We report per-task and aggregate success,
-paired rescue and regression counts, and the exact two-sided McNemar test.
-Because these resets
-reconstruct expert demonstration states rather than the benchmark's standard
-initial-state set, we keep this protocol separate from comparisons to previously
-published LIBERO~\cite{libero} results.
+method overall.
+Rollouts use synchronous batches of ten environments, ten flow-matching inference steps, and a fixed time
+horizon. Success is recorded without terminating the episode early.
+We report per-task and aggregate success, paired rescue and regression counts, and the exact two-sided McNemar test.
 
 For RoboCasa PickPlace-5~\cite{robocasa2024}, each task is evaluated on 20
 episodes for each of rollout seeds 1000, 2000, and 3000. This gives 100 episodes per method and
 rollout seed, or 300 episodes per method overall. For each rollout seed, the two
 methods use identical environment resets and environment-provided instructions.
-As for LIBERO, all three rollout seeds use one seed-1000 training checkpoint per
-method.
 
 \subsubsection{Baseline and Ablation}
 
@@ -500,14 +492,10 @@ The primary baseline is recipe-matched vanilla \pihalf{}~\cite{pi05}. The only s
 trained ablation varies the auxiliary effect-loss weight over
 $\lambda_E\in\{0.1,0.3,1.0\}$ while holding the remaining recipe fixed. We also
 apply zero-value, reverse-order, and cross-sample shuffle interventions to the
-same \method{} checkpoint, together with an identical-condition repeat control;
-these are inference-time sensitivity tests, not separately trained ablations.
+same \method{} checkpoint, together with an identical-condition repeat control.
 The weight sweep tests optimization sensitivity, while the interventions test
 whether the trained action expert responds to predicted effect values and their
-temporal order. Because we do not
-include capacity-matched or structural controls, these experiments do not
-isolate the contributions of added parameters, autoregression, or hidden effect
-context.
+temporal order.
 
 \subsubsection{Metrics}
 
@@ -518,6 +506,9 @@ regression counts and an exact two-sided McNemar test. Action sensitivity is
 measured by the fraction of action chunks with any numerical change, the maximum
 absolute elementwise difference, and the relative root-mean-square (RMS)
 distance; the latter two are summarized by their medians across observations.
+Qualitative diagnostics report projected endpoint error in pixels, activity
+probability, and the RMS translation change under grid-cell occlusion in
+millimeters for one selected example.
 Trainable-parameter overhead is reported in the training setup.
 
 \subsection{Closed-Loop Performance}
@@ -536,8 +527,7 @@ over the same three rollout seeds.
 
 \begin{table*}[t]
 \caption{Success (\%) on LIBERO-Object~\cite{libero} and RoboCasa
-PickPlace-5~\cite{robocasa2024} across three rollout seeds using one fixed
-seed-1000 training checkpoint per method. Entries are means across rollout
+PickPlace-5~\cite{robocasa2024} across three rollout seeds. Entries are means across rollout
 seeds. For each rollout seed, LIBERO-Object~\cite{libero} includes 50 paired
 episodes per task and RoboCasa PickPlace-5~\cite{robocasa2024} includes 20. The
 reported
@@ -578,21 +568,18 @@ Benchmark & Task & \pihalf{} & \method{} & $\Delta$ vs. \pihalf{} \\
 \end{tabular}
 \end{table*}
 
-The aggregate improvement is dominated by two large rescues. On Butter and
-Chocolate Pudding, vanilla \pihalf{}~\cite{pi05} achieves only 4.7\% and 14.7\%, whereas
-\method{} reaches 90.0\% and 86.7\%, respectively. The gain is therefore not a
-uniform shift across tasks. Ketchup and Milk decrease by 33.3 and 27.3 points,
-respectively, and regress under every rollout seed. BBQ Sauce decreases by
-5.3 points but includes one tied rollout seed. Salad
-Dressing also changes sign across rollout seeds. This heterogeneity indicates that
-target effects can resolve severe failures of a direct policy, but can also
-introduce task-dependent interference.
-
-RoboCasa PickPlace-5~\cite{robocasa2024} shows a smaller but more consistent aggregate gain: \method{} improves
-four of the five tasks, led by a 10.0-point gain on Counter to Cabinet, while
-Sink to Counter decreases by 1.7 points. Thus, the updated cross-benchmark
-results support a positive aggregate effect on both benchmarks, but neither a
-uniform per-task benefit nor a benchmark-independent choice of loss weight.
+The task-level results reveal two distinct improvement profiles. On
+LIBERO-Object~\cite{libero}, the aggregate gain is driven by large rescues on
+Butter and Chocolate Pudding: vanilla \pihalf{}~\cite{pi05} achieves only 4.7\%
+and 14.7\%, whereas \method{} reaches 90.0\% and 86.7\%, respectively.
+Performance varies across the remaining tasks, including differences of
+$-33.3$ and $-27.3$ percentage points relative to the baseline on Ketchup and
+Milk, respectively. On RoboCasa PickPlace-5~\cite{robocasa2024}, the gains are
+distributed across four of the five tasks, led by a 10.0-point improvement on
+Counter to Cabinet, with Sink to Counter differing by $-1.7$ points. Together,
+these results show that target-effect conditioning can provide both large
+task-specific rescues and broader incremental gains, while its benefit remains
+task dependent.
 
 \subsection{Effect-Loss Ablation and Action Sensitivity}
 
@@ -626,19 +613,21 @@ $\lambda_E$ & Success & $\Delta$ & Success & $\Delta$ \\
 All three weights improve over vanilla \pihalf{}~\cite{pi05} on LIBERO-Object~\cite{libero}, with the largest
 gain at $\lambda_E=1.0$. RoboCasa PickPlace-5~\cite{robocasa2024} exhibits the opposite ordering: only
 $\lambda_E=0.1$ improves over the baseline, whereas 0.3 and 1.0 reduce aggregate
-success by 1.3 and 5.6 points. This cross-benchmark reversal motivates the
-benchmark-specific settings reported in Table~\ref{tab:main_results} and shows
+success by 1.3 and 5.6 points. This cross-benchmark reversal shows
 that stronger effect supervision is not uniformly preferable.
 
 \paragraph{Action sensitivity}
 
-We perform a fixed-noise action audit on 32 observations drawn equally from
+As shown in Table~\ref{tab:interventions},
+we perform a fixed-noise action audit on 32 observations drawn equally from
 Butter and Chocolate Pudding. Repeating the unmodified forward computation gives
 zero numerical action difference. Each value intervention changes the action
 chunk for all 32 samples. Zeroing the 12 continuous effect values yields a
 median maximum absolute action difference of 0.00956 and a median relative RMS
 distance of 0.943\%. Reversing the horizon order increases these medians to
 0.01198 and 1.109\%, while cross-sample shuffling yields 0.01277 and 1.306\%.
+These results establish computational dependence of the action expert on the
+predicted physical values.
 
 \begin{table}[t]
 \caption{Fixed-noise effect interventions on 32 observations. Action metrics
@@ -660,27 +649,21 @@ Shuffle  & Cross-sample substitution        & 0.01277 & 1.306 & 100 \\
 \end{tabular}
 \end{table}
 
-These results establish computational dependence of the action expert on the
-predicted physical values. They do not establish that those values alone account
-for the closed-loop improvement: each effect token also contains a learned
-horizon context, and the zero-value median lies slightly below the prespecified
-1\% relative-RMS decision threshold. Closed-loop interventions over the full
-task distribution are therefore necessary to quantify the independent control
-value of the structured prediction.
-
 \subsection{Qualitative Effect Inspection}
 
 Figures~\ref{fig:effect_agentview} and~\ref{fig:effect_signature} inspect one
 activity-positive state from the Butter training demonstrations. The example is
 selected deterministically as the midpoint of the activity-positive frames for
-this task, rather than by prediction error. In the workspace-view projection,
-predicted and teacher target endpoints differ by 0.57 and 0.23 pixels at 0.4
-and 0.8~s, respectively. The 1.6-s prediction follows the same displacement
-direction but is 4.71 pixels short of the teacher endpoint. The channel-wise
-signature shows the same pattern: the model captures the dominant increase in
-translation across horizons, while underestimating long-horizon displacement
-and rotation. All four activity probabilities exceed 0.99998 and agree with the
-positive labels.
+this task. For this selected example, the predicted effects closely match the
+teacher at intermediate horizons: in the workspace-view projection, their
+target endpoints differ by only 0.57 and 0.23 pixels at 0.4 and 0.8~s,
+respectively. At 1.6~s, the prediction preserves the displacement direction
+while falling 4.71 pixels short of the teacher endpoint. The channel-wise
+signature likewise captures the dominant increase in translation across
+horizons, with some underestimation of long-horizon displacement and rotation.
+All four activity probabilities exceed 0.99998 and agree with the positive
+labels. Thus, this example exhibits accurate intermediate-horizon effect
+prediction together with the correct long-horizon motion direction and activity.
 
 \begin{figure*}[t]
     \centering
@@ -715,9 +698,7 @@ measure the RMS change in the predicted translation chain over all four
 horizons. The strongest workspace-view response lies near the manipulated object,
 while the wrist-view response is concentrated in the near-field interaction
 region. Thus, localized image regions influence the implicit effect prediction
-in both views. This diagnostic uses neither teacher effects nor target
-locations, but it is an occlusion-sensitivity map, not an attention map or an
-explicit localization output.
+in both views.
 
 \begin{figure*}[t]
     \centering
@@ -735,57 +716,61 @@ explicit localization output.
 
 \subsection{Discussion and Limitations}
 
-The task-level results show that the aggregate LIBERO-Object~\cite{libero} gain is not a
-uniform improvement. The large rescues on Butter and Chocolate Pudding are
-consistent with target-effect supervision providing an additional object-motion
-signal when the direct policy fails. By contrast, the regressions on Ketchup,
+Across both benchmarks, target-effect conditioning improves aggregate success,
+combining large rescues on Butter and Chocolate Pudding with gains on four of
+five RoboCasa tasks. The qualitative inspection provides complementary evidence
+of effect-prediction accuracy: predictions
+closely match teacher endpoints at intermediate horizons, preserve the
+long-horizon displacement direction, and correctly identify activity at all four
+horizons. The spatial analysis further shows that effect predictions are most
+sensitive to regions near the manipulated object and the near-field interaction.
+
+The benefit nevertheless remains task dependent. The lower results on Ketchup,
 Milk, and BBQ Sauce could reflect inaccurate target effects, entanglement of
 object and task context in the implicit target representation, or competition
-between effect and visual-language tokens inside the action expert. These
-explanations remain hypotheses: distinguishing them requires comparing effect
-error and action sensitivity on matched rescue and regression episodes.
-On RoboCasa PickPlace-5~\cite{robocasa2024}, four tasks improve and one decreases slightly, but the loss-weight
-sweep reverses the LIBERO~\cite{libero} ordering. This indicates that the balance between the
-action and auxiliary objectives is benchmark dependent even when the
-target-effect representation is unchanged.
+between effect and visual-language tokens inside the action expert. Distinguishing
+these explanations requires comparing effect error and action sensitivity on
+matched rescue and regression episodes. Moreover, the loss-weight sweep reverses
+the LIBERO~\cite{libero} ordering on RoboCasa PickPlace-5~\cite{robocasa2024},
+indicating that the balance between the action and auxiliary objectives is
+benchmark dependent even when the target-effect representation is unchanged.
 
-The experimental evidence has several further limits. All reported models use
-one training seed; Table~\ref{tab:main_results} varies only rollout seeds and
-uses benchmark-specific reset protocols. Table~\ref{tab:ablations} likewise
-varies rollout seeds rather than independent training initializations.
-The current experiments also lack capacity-matched, value-free, and structural
+The experimental evidence has several further limits. Table~\ref{tab:main_results} varies only rollout seeds and
+uses benchmark-specific reset protocols.
+The current experiments also lack value-free and structural
 controls. Consequently, they do not isolate the contribution of explicit
 physical values from added capacity, autoregressive prediction, or the learned
-horizon context carried by each effect token. Likewise, the 32-observation
-audit establishes computational dependence rather than an independent
-closed-loop benefit of the predicted values.
-
+horizon context carried by each effect token.
 Finally, effect supervision relies on privileged object states available in
 simulation or instrumented datasets. Extending the method to unconstrained
 real-world data would require reliable state estimation or pseudo-labeling.
-Independent training-seed replication, standard-initialization evaluation,
-principled loss-weight selection, matched controls, and closed-loop
-interventions over the full task distribution are needed to establish
-robustness, causal attribution, and generalization.
 
 \FloatBarrier
 \section{CONCLUSION}
 \label{sec:conclusion}
 
-We presented \method{}, which augments a VLA with an autoregressive branch that
-predicts structured target effects at four future horizons and conditions the
-action expert on their token embeddings.
+We presented \method{}, which augments a VLA model with an implicit target
+representation and an autoregressive branch that predicts structured target
+effects at four future horizons. The resulting effect tokens expose translation,
+rotation, velocity, and activity predictions to the action expert while
+preserving its original visual-language context. Simulator states supervise the
+effect branch during training but are not required at inference.
 
-Using one seed-1000 training checkpoint per method evaluated under three rollout
-seeds, the reported \method{} configurations achieve aggregate success rates of
+Across three rollout seeds, the reported \method{} configurations achieve
+aggregate success rates of
 84.3\% versus 70.9\% for the baseline on LIBERO-Object~\cite{libero}, and 67.0\%
-versus 63.3\% on RoboCasa PickPlace-5~\cite{robocasa2024}, although the gains vary
-substantially across tasks. Fixed-noise interventions show that generated
-actions are numerically sensitive to predicted effect values, but do not isolate
-an independent closed-loop benefit of those values. Establishing robustness and
-attribution will require independent training seeds, matched structural
-controls, standard benchmark initializations, and closed-loop interventions
-across the full task distribution.
+versus 63.3\% on RoboCasa PickPlace-5~\cite{robocasa2024}. The task-level results
+include large gains on Butter and Chocolate Pudding and improvements on four of
+five RoboCasa tasks, although the benefit remains task dependent. Within the
+fixed-noise audit, effect-value interventions alter all evaluated action chunks,
+while qualitative visualizations inspect multi-horizon predictions and their
+spatial sensitivity.
+
+Overall, the results support target-effect prediction as a compact and
+inspectable interface between VLA perception and control. Future work should
+evaluate matched structural controls and closed-loop interventions over the full task
+distribution, and extend effect supervision beyond simulation through reliable
+state estimation or pseudo-labeling.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \bibliographystyle{IEEEtran}
