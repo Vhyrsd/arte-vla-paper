@@ -35,7 +35,6 @@
 ArTE-VLA: Autoregressive Target Effects with Implicit Target Grounding for Vision-Language-Action Models
 }
 
-\author{Anonymous Authors}
 
 \begin{document}
 \maketitle
@@ -135,12 +134,16 @@ Our main contributions are:
 \subsection{Vision-Language-Action Models}
 
 VLA models transfer pretrained vision-language priors to robot control through
-diverse manipulation trajectories \cite{openvla}. Octo supports language or goal-image
+diverse manipulation trajectories \cite{openvla}. RT-1 demonstrated scalable
+language-conditioned multi-task robot control, while RT-2 transferred
+Internet-scale vision-language pretraining to action-token generation
+\cite{rt1,rt2}. Octo supports language or goal-image
 conditioning and adaptation to new observation and action spaces \cite{octo},
 while OpenVLA emphasizes an open, scalable VLA that can be fine-tuned for
-downstream manipulation \cite{openvla}. Flow-matching policies avoid
-discretizing continuous controls: $\pi_0$ couples a vision-language backbone to
-a continuous action expert \cite{pi0}, and \pihalf{} extends this family with
+downstream manipulation \cite{openvla}. Flow-matching generative models learn
+continuous vector fields without discretizing the generated variables
+\cite{lipman2023flow}. In robotics, $\pi_0$ couples a vision-language backbone
+to a continuous action expert \cite{pi0}, and \pihalf{} extends this family with
 heterogeneous co-training for open-world manipulation \cite{pi05}. These systems
 primarily map the current multimodal context directly to actions. \method{} uses
 \pihalf{}~\cite{pi05} as its backbone but adds a jointly supervised physical prediction
@@ -155,16 +158,20 @@ visual goals before actions \cite{cotvla}; and WorldVLA places image and action
 generation in a shared autoregressive formulation \cite{worldvla}. These visual
 futures retain appearance and multi-object context, but also encode scene content
 irrelevant to the commanded manipulation \cite{xu2026futurevla, finn2017deep}.
-While proposed \method{} neither synthesizes future
-observations nor performs explicit planning with learned dynamics. It predicts a
+In autonomous driving, ChainFlow-VLA forms autoregressive ego-trajectory modes as
+causal proposals and refines them through VLM-guided residual diffusion
+\cite{wang2026chainflow}. Unlike these approaches, \method{} neither synthesizes
+future observations nor refines full trajectory proposals. It predicts a
 low-dimensional physical change for one language-conditioned target and inserts
-it into the action context. Thus, visual prediction preserves rich scene
-evolution, whereas target effects expose compact values whose temporal order and
-influence on actions can be directly tested.
+it into the action context. Thus, prior approaches preserve rich visual context
+or optimize complete trajectories, whereas target effects expose compact values
+whose temporal order and influence on actions can be directly tested.
 
 \subsection{Object and Point Motion as Policy Guidance}
 
 Object-centered conditioning separates task-relevant entities from the scene \cite{kasu2026object,wang2026ocra}.
+Earlier language-conditioned manipulation methods separate semantic ``what''
+reasoning from spatial ``where'' prediction \cite{cliport}.
 MOO extracts object cues from the image and command to support manipulation of
 unseen categories \cite{moo}, but describes the current target rather than its
 desired evolution. Motion representations complement this grounding: Any-point
@@ -692,7 +699,8 @@ prediction together with the correct long-horizon motion direction and activity.
 \end{figure*}
 
 Figure~\ref{fig:effect_spatial} complements the value-space inspection with an
-input-space perturbation test. We independently replace each cell of an
+input-space perturbation test. Following occlusion-based sensitivity analysis
+\cite{zeiler2014visualizing}, we independently replace each cell of an
 $8\times8$ grid in the workspace or wrist view with that view's mean RGB value and
 measure the RMS change in the predicted translation chain over all four
 horizons. The strongest workspace-view response lies near the manipulated object,
@@ -700,7 +708,7 @@ while the wrist-view response is concentrated in the near-field interaction
 region. Thus, localized image regions influence the implicit effect prediction
 in both views.
 
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{implicit_target_effect_spatial_heatmap.pdf}
     \caption{Spatial occlusion sensitivity of the implicit target-effect
@@ -712,7 +720,7 @@ in both views.
     teacher effect, target position, segmentation, or simulator state is used
     to compute the sensitivity.}
     \label{fig:effect_spatial}
-\end{figure*}
+\end{figure}
 
 \subsection{Discussion and Limitations}
 
