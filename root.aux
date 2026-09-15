@@ -1,0 +1,192 @@
+\relax 
+\citation{kawaharazuka2025vision}
+\citation{li2024towards}
+\citation{ma2026survey}
+\citation{shao2025large}
+\citation{pi05}
+\citation{din2025vision}
+\citation{kawaharazuka2025vision}
+\citation{sapkota2025vision}
+\citation{zhong2025survey}
+\citation{wang2026world}
+\citation{guo2026action}
+\citation{wang2026world}
+\citation{xu2026unmasking}
+\citation{cotvla}
+\citation{worldvla}
+\citation{atm}
+\citation{track2act}
+\citation{zhong2026acot}
+\citation{wang2026world}
+\citation{wang2026world}
+\@writefile{toc}{\contentsline {section}{\numberline {I}INTRODUCTION}{1}{}\protected@file@percent }
+\newlabel{sec:introduction}{{I}{1}{}{section.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Comparison of action-generation paradigms. (a) Direct VLA policies map multimodal context to an action chunk without an explicit prediction of scene evolution. (b) A world action model~\cite  {wang2026world} predicts high-dimensional visual futures before action generation. (c) ArTE-VLA{} instead infers an implicit language-grounded target and predicts a compact chain of structured target effects that conditions the action expert.}}{1}{}\protected@file@percent }
+\newlabel{fig:teaser}{{1}{1}{}{figure.1}{}}
+\citation{pi05}
+\citation{openvla}
+\citation{rt1}
+\citation{rt2}
+\citation{octo}
+\citation{openvla}
+\citation{lipman2023flow}
+\citation{pi0}
+\citation{pi05}
+\citation{pi05}
+\citation{ding2025understanding}
+\citation{gr2}
+\citation{cotvla}
+\citation{worldvla}
+\citation{xu2026futurevla}
+\citation{finn2017deep}
+\citation{wang2026chainflow}
+\citation{kasu2026object}
+\citation{wang2026ocra}
+\citation{cliport}
+\citation{moo}
+\citation{atm}
+\citation{track2act}
+\citation{libero}
+\citation{pi05}
+\citation{libero}
+\citation{pi05}
+\citation{pi05}
+\citation{pi05}
+\citation{pi05}
+\@writefile{toc}{\contentsline {section}{\numberline {II}RELATED WORK}{2}{}\protected@file@percent }
+\newlabel{sec:related_work}{{II}{2}{}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {II-A}Vision-Language-Action Models}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {II-B}Predictive Representations for Control}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {II-C}Object and Point Motion as Policy Guidance}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}METHOD}{2}{}\protected@file@percent }
+\newlabel{sec:method}{{III}{2}{}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-A}Problem Formulation}{2}{}\protected@file@percent }
+\newlabel{eq:factorization}{{1}{2}{}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-B}Implicit Target Representation}{2}{}\protected@file@percent }
+\citation{pi05}
+\citation{pi05}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Overview of ArTE-VLA{}, illustrated for the dual-view LIBERO~\cite  {libero} setting. (a) Workspace and wrist RGB observations, the instruction, and robot state form the original \ensuremath  {\pi _{0.5}}{}~\cite  {pi05} prefix $X_t$. (b) Masked pooling and an implicit target head seed a four-horizon autoregressive effect chain; each hidden state and predicted 13-D effect are projected into an effect token. (c) The effect tokens augment $X_t$ and condition the flow-matching action expert, which generates the complete action chunk. The dashed path denotes simulator-derived effect supervision and validity masks.}}{3}{}\protected@file@percent }
+\newlabel{fig:overview}{{2}{3}{}{figure.2}{}}
+\newlabel{eq:target}{{2}{3}{}{equation.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-C}Multi-Horizon Effect Chain}{3}{}\protected@file@percent }
+\newlabel{eq:effect_ar}{{5}{3}{}{equation.5}{}}
+\newlabel{eq:effect}{{6}{3}{}{equation.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-D}Conditioning the Action Expert}{3}{}\protected@file@percent }
+\newlabel{eq:token}{{7}{3}{}{equation.7}{}}
+\newlabel{eq:action_flow}{{8}{3}{}{equation.8}{}}
+\citation{libero}
+\citation{robocasa2024}
+\citation{pi05}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{robocasa2024}
+\citation{pi05}
+\citation{pi05}
+\citation{libero}
+\citation{robocasa2024}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-E}Training Objective}{4}{}\protected@file@percent }
+\newlabel{eq:effect_losses}{{10}{4}{}{equation.10}{}}
+\newlabel{eq:objective}{{11}{4}{}{equation.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-F}Replay-Based Effect Supervision}{4}{}\protected@file@percent }
+\newlabel{sec:effect_supervision}{{III-F}{4}{}{subsection.3.6}{}}
+\newlabel{eq:effect_labels}{{15}{4}{}{equation.15}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-G}Effect Interventions}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}EXPERIMENTS}{4}{}\protected@file@percent }
+\newlabel{sec:experiments}{{IV}{4}{}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-A}Experimental Setup}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {IV-A.1}Benchmark and Data}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {IV-A.2}Training Setup}{4}{}\protected@file@percent }
+\citation{pi05}
+\citation{libero}
+\citation{libero}
+\citation{robocasa2024}
+\citation{pi05}
+\citation{pi05}
+\citation{libero}
+\citation{pi05}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{robocasa2024}
+\citation{libero}
+\citation{pi05}
+\citation{robocasa2024}
+\citation{libero}
+\citation{pi05}
+\citation{libero}
+\citation{robocasa2024}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Benchmark-specific training configurations.}}{5}{}\protected@file@percent }
+\newlabel{tab:training_config}{{I}{5}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {IV-A.3}Evaluation Protocol}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {IV-A.4}Baseline and Ablation}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {IV-A.5}Metrics}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-B}Closed-Loop Performance}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-C}Effect-Loss Ablation and Action Sensitivity}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {IV-C.0.a}Effect-loss weight}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {IV-C.0.b}Action sensitivity}{5}{}\protected@file@percent }
+\citation{zeiler2014visualizing}
+\citation{libero}
+\citation{robocasa2024}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Success (\%) on LIBERO-Object~\cite  {libero} and RoboCasa PickPlace-5~\cite  {robocasa2024} across three rollout seeds. Entries are means across rollout seeds. For each rollout seed, LIBERO-Object~\cite  {libero} includes 50 paired episodes per task and RoboCasa PickPlace-5~\cite  {robocasa2024} includes 20. The reported ArTE-VLA{} setting uses $\lambda _E=1$ on LIBERO-Object~\cite  {libero} and $\lambda _E=0.1$ on RoboCasa PickPlace-5~\cite  {robocasa2024}.}}{6}{}\protected@file@percent }
+\newlabel{tab:main_results}{{II}{6}{}{table.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Effect-loss-weight ablation averaged across rollout seeds 1000, 2000, and 3000. All LIBERO~\cite  {libero} evaluations use a batch size of 10.}}{6}{}\protected@file@percent }
+\newlabel{tab:ablations}{{III}{6}{}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Fixed-noise effect interventions on 32 observations. Action metrics are measured relative to the unmodified computation.}}{6}{}\protected@file@percent }
+\newlabel{tab:interventions}{{IV}{6}{}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-D}Qualitative Effect Inspection}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-E}Discussion and Limitations}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Workspace-view projection of four-horizon implicit target effects for one Butter training state. The first row shows simulator teacher effects and the second row shows model predictions. Colored arrows represent target displacement, dashed arrows represent future linear velocity, and short dark segments indicate the projected target $x$-axis. The current target pose and camera calibration are used only for visualization projection and are not model inputs.}}{7}{}\protected@file@percent }
+\newlabel{fig:effect_agentview}{{3}{7}{}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Implicit target-effect signatures for the state in Fig.~\ref {fig:effect_agentview}. Rows denote the four future horizons, and columns encode translation, rotation, linear velocity, angular velocity, and activity. Continuous teacher and prediction channels use shared group-wise scales; the activity column shows the binary teacher label or predicted probability. Future-effect labels are used only to form the teacher and error panels and are not provided to the prediction path.}}{7}{}\protected@file@percent }
+\newlabel{fig:effect_signature}{{4}{7}{}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Spatial occlusion sensitivity of the implicit target-effect prediction for the state in Figs.~\ref {fig:effect_agentview} and~\ref {fig:effect_signature}. Each heatmap reports the RMS change, in millimeters, of the predicted four-horizon target translation chain after independently occluding an $8\times 8$ grid cell. Both views share the same color scale; warmer regions have greater influence on the prediction. No teacher effect, target position, segmentation, or simulator state is used to compute the sensitivity.}}{7}{}\protected@file@percent }
+\newlabel{fig:effect_spatial}{{5}{7}{}{figure.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}CONCLUSION}{7}{}\protected@file@percent }
+\newlabel{sec:conclusion}{{V}{7}{}{section.5}{}}
+\citation{libero}
+\citation{robocasa2024}
+\bibstyle{IEEEtran}
+\bibdata{ref}
+\bibcite{kawaharazuka2025vision}{1}
+\bibcite{li2024towards}{2}
+\bibcite{ma2026survey}{3}
+\bibcite{shao2025large}{4}
+\bibcite{pi05}{5}
+\bibcite{din2025vision}{6}
+\bibcite{sapkota2025vision}{7}
+\bibcite{zhong2025survey}{8}
+\bibcite{wang2026world}{9}
+\bibcite{guo2026action}{10}
+\bibcite{xu2026unmasking}{11}
+\bibcite{cotvla}{12}
+\bibcite{worldvla}{13}
+\bibcite{atm}{14}
+\bibcite{track2act}{15}
+\bibcite{zhong2026acot}{16}
+\bibcite{openvla}{17}
+\bibcite{rt1}{18}
+\bibcite{rt2}{19}
+\bibcite{octo}{20}
+\bibcite{lipman2023flow}{21}
+\bibcite{pi0}{22}
+\bibcite{ding2025understanding}{23}
+\bibcite{gr2}{24}
+\bibcite{xu2026futurevla}{25}
+\bibcite{finn2017deep}{26}
+\bibcite{wang2026chainflow}{27}
+\bibcite{kasu2026object}{28}
+\bibcite{wang2026ocra}{29}
+\bibcite{cliport}{30}
+\bibcite{moo}{31}
+\bibcite{libero}{32}
+\bibcite{robocasa2024}{33}
+\bibcite{zeiler2014visualizing}{34}
+\@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
+\gdef \@abspage@last{8}

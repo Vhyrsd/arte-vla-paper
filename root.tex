@@ -1,9 +1,3 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% ArTE-VLA draft for an intended ICRA 2027 submission.
-% Internal drafting notes should remain in comments rather than visible prose.
-% Before submission: add independent training-seed results, replace the author block, and verify the final ICRA format and bibliography.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \documentclass[letterpaper,10pt,conference]{ieeeconf}
 \IEEEoverridecommandlockouts
 \overrideIEEEmargins
@@ -21,7 +15,7 @@
 \newcommand{\method}{ArTE-VLA}
 \newcommand{\pihalf}{\ensuremath{\pi_{0.5}}}
 \newif\ifdraftnotes
-\draftnotestrue % Set to \draftnotesfalse before submission.
+\draftnotesfalse % Set to \draftnotesfalse before submission.
 \newcommand{\draftnote}[1]{%
   \ifdraftnotes
     \par\smallskip\noindent
@@ -74,7 +68,7 @@ Although expressive, these intermediate representations can be high-dimensional 
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{teaser_2.pdf}
+    \includegraphics[width=0.81\columnwidth]{teaser_5.pdf}
     \caption{Comparison of action-generation paradigms.
     (a) Direct VLA policies map multimodal context to an action chunk without an explicit prediction of scene evolution.
     (b) A world action model~\cite{wang2026world} predicts high-dimensional visual futures before action generation.
