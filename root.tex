@@ -104,16 +104,12 @@ the effect at one horizon is used to predict the next. Horizon-specific hidden
 states and effect values are then projected into tokens that condition the
 flow-matching action expert.
 
-To physically ground this bottleneck without changing the policy's deployment
-inputs, we use simulator-derived target effects as privileged supervision during
-training only. We recover object states from the simulator states stored in
-LIBERO~\cite{libero} demonstrations and construct aligned multi-horizon effect
-labels. These labels appear only in the auxiliary prediction loss; the action
-expert always receives model-predicted effects. At test time, \method{} uses the
-same RGB observations, instruction, and robot state as vanilla \pihalf{}
-\cite{pi05}. Consequently, structured physical supervision can shape the policy
-without introducing an object detector, simulator state, task identifier, or
-ground-truth target state into the deployed model.
+To physically ground this bottleneck, we construct simulator-derived target
+effects as privileged labels. We recover object states from the simulator states
+stored in LIBERO~\cite{libero} demonstrations and construct aligned
+multi-horizon effect labels. These labels ground the compact bottleneck in
+intended object motion at multiple horizons, complementing the end-to-end action
+objective.
 
 Our main contributions are:
 \begin{itemize}
@@ -189,8 +185,8 @@ compact supervision and action-conditioning bottleneck.
     autoregressive effect chain; each hidden state and predicted 13-D effect are
     projected into an effect token. (c) The effect tokens augment $X_t$ and
     condition the flow-matching action expert, which generates the complete
-    action chunk. The dashed path denotes simulator-derived effect labels and
-    validity masks used only during training.}
+    action chunk. The dashed path denotes simulator-derived effect supervision
+    and validity masks.}
     \label{fig:overview}
 \end{figure*}
 
@@ -356,14 +352,17 @@ labels. Training and deployment therefore share the same
 target-to-effect-to-action path.
 
 \subsection{Replay-Based Effect Supervision}
+\label{sec:effect_supervision}
 
-We obtain structured supervision without changing the policy's deployment
-inputs. For every demonstration frame, the enrichment procedure restores the
-stored flattened MuJoCo state and calls the simulator's kinematic forward pass;
-it never steps the recorded action. Let $p_t$, $R_t$, $v_t$, and $\omega_t$
-denote the target's position, orientation, linear velocity, and angular velocity
-in the restored state, and let $R_{\mathrm{ee},t}$ denote the current
-end-effector orientation. Matching stored states at $t$ and $t+k_h$ yields
+We obtain structured supervision from simulator states during data enrichment;
+at deployment, the model uses only the same images, instruction, and robot state
+as the \pihalf{}~\cite{pi05} baseline. For every demonstration frame, the
+enrichment procedure restores the stored flattened MuJoCo state and calls the
+simulator's kinematic forward pass; it never steps the recorded action. Let
+$p_t$, $R_t$, $v_t$, and $\omega_t$ denote the target's position, orientation,
+linear velocity, and angular velocity in the restored state, and let
+$R_{\mathrm{ee},t}$ denote the current end-effector orientation. Matching stored
+states at $t$ and $t+k_h$ yields
 \begin{align}
 \Delta p_t^h &= R_{\mathrm{ee},t}^{\top}(p_{t+k_h}-p_t), \\
 \Delta r_t^h &= \operatorname{Log}(R_t^{\top}R_{t+k_h}), \\
@@ -376,21 +375,14 @@ $\|\Delta r_t^h\|_2$ exceeds $1^{\circ}$, $\|v_t^h\|_2$ exceeds $0.01$~m/s, or
 $\|\omega_t^h\|_2$ exceeds $0.05$~rad/s. A horizon is valid only when the same
 target exists at both frames and $t+k_h$ remains inside the episode.
 
-We apply this replay-and-label construction throughout. For each task, the
-manipulated object is resolved to its simulator body; the stored states are then
-restored and Eq.~\eqref{eq:effect_labels} is applied with the same horizons and
-validity rules. The effect schema and deployment inputs therefore remain
-unchanged.
+Task and episode metadata identify the manipulated object's simulator body;
+for RoboCasa PickPlace-5, this is the transported object. We use the stored
+demonstration states for LIBERO-Object and the accompanying replay states for
+RoboCasa, applying the same horizons, thresholds, and validity rules to both.
+Labels remain aligned with the original demonstration frames.
 
-Object names and simulator body identifiers are retained only as enrichment
-provenance. The enriched data preserve the original RGB observations,
-proprioception, actions, instructions, and frame indices. During training, the
-task index identifies the teacher entity in the multi-entity replay tensor. The
-selected labels are then packed into model slot 0, the sole active target slot.
-Neither the task index nor the teacher slot,
-object identity, effect label, or simulator state is embedded by the policy. At
-deployment, the model uses only the same images, instruction, and robot state as
-the \pihalf{}~\cite{pi05} baseline.
+Object identities and task indices select the corresponding supervision labels.
+Enrichment preserves the original observations, actions, and instructions.
 
 \subsection{Effect Interventions}
 
@@ -420,10 +412,16 @@ demonstration episodes and 66,984 frames. Replay enrichment yields 253,423 valid
 target-horizon labels, of which 170,107 are active. We verify frame-level
 alignment between the original and enriched datasets and observe a maximum
 action-alignment error of $2.90\times10^{-8}$. Terminal horizons without a valid
-successor state are masked. We additionally evaluate five atomic PickPlace tasks
-from RoboCasa~\cite{robocasa2024}, collectively denoted RoboCasa PickPlace-5:
-Counter to Cabinet, Counter to Stove, Drawer to Counter, Sink to Counter, and
-Toaster to Counter.
+successor state are masked.
+
+We also evaluate five atomic tasks from RoboCasa~\cite{robocasa2024}, a subset
+we denote RoboCasa PickPlace-5: Counter to Cabinet, Counter to Stove, Drawer to
+Counter, Sink to Counter, and Toaster to Counter. Both methods use the same
+2,517 human demonstrations (760,518 frames) from
+\path{lerobot/robocasa_target_human_unified}, with per-episode instructions
+from replay metadata. Enrichment yields 2,969,079 valid target-horizon labels,
+including 1,404,095 active labels, under the rules in
+Section~\ref{sec:effect_supervision}.
 
 \subsubsection{Training Setup}
 
@@ -776,9 +774,7 @@ robustness, causal attribution, and generalization.
 
 We presented \method{}, which augments a VLA with an autoregressive branch that
 predicts structured target effects at four future horizons and conditions the
-action expert on their token embeddings. Simulator-derived object states
-supervise this branch only during training, preserving the original RGB,
-language, and robot-state inputs at inference.
+action expert on their token embeddings.
 
 Using one seed-1000 training checkpoint per method evaluated under three rollout
 seeds, the reported \method{} configurations achieve aggregate success rates of

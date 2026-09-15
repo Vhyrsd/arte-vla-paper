@@ -124,7 +124,7 @@
 
 ### P1-02 补全 RoboCasa 训练数据和标注流程
 
-- 状态：`[ ] 待处理`
+- 状态：`[x] 已完成`
 - 初始位置：Replay-Based Effect Supervision，`root.tex:356-391`；Benchmark and Data，`root.tex:413-423`
 - 当前问题：LIBERO 报告了 episodes、frames、valid labels 和 active labels，RoboCasa 没有对应信息；“We apply this ... throughout”过于笼统。
 - 需要补充：
@@ -134,7 +134,9 @@
   - simulator state extraction 和 replay 细节；
   - PickPlace-5 是官方 suite 还是作者选取的子集。
 - 验收标准：两个 benchmark 的数据来源和 enrichment 过程达到相近的描述粒度。
-- 修改记录：
+- 修改记录：2026-09-15 已修改 Section III.F 和 IV.A。III.F 补充 LIBERO 的任务到物体映射，以及 RoboCasa 的 replay extras、按 object_cfgs 顺序解析 <name>_main 并选取首个物体为 teacher slot 0、MuJoCo 状态恢复与字段提取、共享 horizon/阈值和按 episode 对齐流程。IV.A 明确 PickPlace-5 是本文对 RoboCasa 五任务子集的命名，补充 human demonstrations 来源、2,517 episodes、760,518 frames，以及 2,969,079 valid / 1,404,095 active target-horizon labels。统计从本地 `/home/smart/GY/remote_server/datasets/robocasa_pickplace5_effect_final` 的 episode 元数据和完整 data parquet 核对；标签按 slot 0、effect mask 与 horizon mask 的交集统计，active 使用第 13 维 >= 0.5。标注流程依据 `enrich_robocasa_target_replay.py` 和 `merge_robocasa_effect_sidecars.py`；语言来源及五任务 slot 配置依据 `prepare_robocasa_pickplace5.py` 和 `plans/stage1/stage1命令.txt` 中的 lang_v2 训练命令。
+
+- 精简记录：2026-09-15 按用户要求，III.F 将上述实现细节压缩为目标选择、状态来源、共享标注规则及监督信息边界，删除文件名、字段名和 slot 打包细节；IV.A 保留五任务子集定义、数据来源、演示/帧数及 valid/active 标签统计。实现依据保留在本清单的修改记录中。
 
 ### P1-03 补全 action 与 rollout 协议
 
@@ -383,6 +385,6 @@
 ## 六、总体进度
 
 - P0：1 / 7 完成
-- P1：1 / 10 完成
+- P1：2 / 10 完成
 - P2：4 / 11 完成
 - 当前阶段：待确定实验与主结果呈现方案
